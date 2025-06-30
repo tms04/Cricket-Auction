@@ -19,10 +19,6 @@
         {
             "src": "/tournament/:id",
             "dest": "/"
-        },
-        {
-            "src": "*",
-            "dest": "/"
         }
     ]
 }
