@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { Trophy, Users, Calendar, Clock, Target, Zap, Circle, Star } from 'lucide-react';
 import { Tournament } from '../types';
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+const API_BASE = import.meta.env.VITE_API_URL || 'https://cricket-auction-yvh3.onrender.com/api';
 
 const LandingPage: React.FC = () => {
     const [tournaments, setTournaments] = useState<Tournament[]>([]);
