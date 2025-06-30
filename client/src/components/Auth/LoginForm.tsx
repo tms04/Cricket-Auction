@@ -4,7 +4,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 
 const LoginForm: React.FC = () => {
-  const [email, setEmail] = useState('master@auction.com');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -127,17 +127,17 @@ const LoginForm: React.FC = () => {
             </button>
           </form>
 
-          <div className="mt-8">
+          {/* <div className="mt-8">
             <div className="relative">
               <div className="absolute inset-0 flex items-center">
                 <div className="w-full border-t border-gray-300" />
-              </div>
-              <div className="relative flex justify-center text-sm">
+              </div> */}
+          {/* <div className="relative flex justify-center text-sm">
                 <span className="px-2 bg-white text-gray-500">Demo Credentials</span>
-              </div>
-            </div>
+              </div> */}
+          {/* </div> */}
 
-            <div className="mt-6 grid grid-cols-1 gap-3">
+          {/* <div className="mt-6 grid grid-cols-1 gap-3">
               {loginCredentials.map((cred, index) => (
                 <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                   <div className="flex items-center space-x-3">
@@ -148,12 +148,12 @@ const LoginForm: React.FC = () => {
                     {cred.email} / {cred.password}
                   </div>
                 </div>
-              ))}
-            </div>
-          </div>
+              ))} */}
+          {/* </div> */}
+          {/* </div> */}
         </div>
       </div>
-    </div>
+    </div >
   );
 };
 
