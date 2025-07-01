@@ -147,7 +147,7 @@ const ViewerPage: React.FC = () => {
                                             {tournament.status.charAt(0).toUpperCase() + tournament.status.slice(1)}
                                         </div>
 
-                                        <div className="grid grid-cols-3 gap-4 mt-6">
+                                        {/* <div className="grid grid-cols-3 gap-4 mt-6">
                                             <div className="bg-white/5 rounded-lg p-3 text-center">
                                                 <div className="text-xs text-orange-300 mb-1">TEAMS</div>
                                                 <div className="text-xl font-bold text-white">
@@ -166,7 +166,7 @@ const ViewerPage: React.FC = () => {
                                                     {formatBudget(tournament.budget)}
                                                 </div>
                                             </div>
-                                        </div>
+                                        </div> */}
 
                                         <div className="mt-6">
                                             <button className="w-full py-3 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-400 hover:to-red-400 text-white font-bold rounded-lg flex items-center justify-center gap-2 transition-all">
