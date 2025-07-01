@@ -1,22 +1,8 @@
 {
     "routes": [
         {
-            "src": "/_next/static/(.*)",
-            "headers": {
-                "cache-control": "public, max-age=31536000, immutable"
-            }
-        },
-        {
-            "src": "/static/(.*)",
-            "headers": {
-                "cache-control": "public, max-age=31536000, immutable"
-            }
-        },
-        {
-            "src": "/(.*\.js)",
-            "headers": {
-                "content-type": "application/javascript"
-            }
+            "src": "/",
+            "dest": "/"
         },
         {
             "src": "/viewer",
@@ -31,15 +17,8 @@
             "dest": "/"
         },
         {
-            "src": "/tournament/(?<id>[^/]+)",
+            "src": "/tournament/(.*)",
             "dest": "/"
-        },
-        {
-            "src": "/(.*)",
-            "dest": "/",
-            "headers": {
-                "content-type": "text/html"
-            }
         }
     ]
 }
