@@ -51,13 +51,13 @@ const LandingPage: React.FC = () => {
                 </div>
                 <div className="hidden md:flex space-x-6">
                     <a href="/" className="text-white hover:text-yellow-400 transition-colors">Home</a>
-                    <a href="/about" className="text-white hover:text-yellow-400 transition-colors">About</a>
-                    <a href="/tournaments" className="text-white hover:text-yellow-400 transition-colors">Tournaments</a>
+                    {/* <a href="/about" className="text-white hover:text-yellow-400 transition-colors">About</a> */}
+                    <a href="/viewer" className="text-white hover:text-yellow-400 transition-colors">Tournaments</a>
                     <a href="/contact" className="text-white hover:text-yellow-400 transition-colors">Contact</a>
                 </div>
                 <div className="flex space-x-4">
                     <a href="/login" className="px-4 py-2 text-sm font-medium text-white bg-yellow-500 rounded-lg hover:bg-yellow-600 transition-colors">Login</a>
-                    <a href="/register" className="px-4 py-2 text-sm font-medium text-white border border-yellow-500 rounded-lg hover:bg-yellow-500/10 transition-colors">Register</a>
+                    {/* <a href="/register" className="px-4 py-2 text-sm font-medium text-white border border-yellow-500 rounded-lg hover:bg-yellow-500/10 transition-colors">Register</a> */}
                 </div>
             </nav>
 
@@ -103,7 +103,7 @@ const LandingPage: React.FC = () => {
             </section>
 
             {/* Stats Section */}
-            <section className="w-full max-w-7xl mx-auto my-16 px-4 z-20">
+            {/* <section className="w-full max-w-7xl mx-auto my-16 px-4 z-20">
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
                     <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl p-6 border border-gray-700 text-center">
                         <div className="text-4xl font-bold text-yellow-400 mb-2">50+</div>
@@ -122,7 +122,7 @@ const LandingPage: React.FC = () => {
                         <div className="text-gray-300">Support</div>
                     </div>
                 </div>
-            </section>
+            </section> */}
 
             {/* Features Section */}
             <section className="w-full max-w-7xl mx-auto my-16 px-4 z-20">
@@ -258,7 +258,7 @@ const LandingPage: React.FC = () => {
             </section>
 
             {/* Testimonials Section */}
-            <section className="w-full max-w-7xl mx-auto my-16 px-4 z-20">
+            {/* <section className="w-full max-w-7xl mx-auto my-16 px-4 z-20">
                 <h2 className="text-3xl md:text-4xl font-bold text-center text-white mb-16">
                     <span className="relative">
                         <span className="relative z-10">What Our Users Say</span>
@@ -315,7 +315,7 @@ const LandingPage: React.FC = () => {
                         </div>
                     </div>
                 </div>
-            </section>
+            </section> */}
 
             {/* CTA Section */}
             <section className="w-full max-w-5xl mx-auto my-24 px-4 z-20">
@@ -328,15 +328,15 @@ const LandingPage: React.FC = () => {
                         Register now and start building your championship-winning cricket team today.
                     </p>
                     <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                        <a
+                        {/* <a
                             href="/register"
                             className="px-8 py-4 bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-400 hover:to-yellow-500 text-gray-900 font-bold rounded-lg shadow-lg transition-all duration-300 transform hover:-translate-y-1"
                         >
                             Create Account
-                        </a>
+                        </a> */}
                         <a
-                            href="/tournaments"
-                            className="px-8 py-4 bg-transparent hover:bg-gray-700/50 border border-gray-600 text-white font-bold rounded-lg shadow-lg transition-all duration-300 transform hover:-translate-y-1"
+                            href="/viewer"
+                            className="px-8 py-4 bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-400 hover:to-yellow-500 text-gray-900 font-bold rounded-lg shadow-lg transition-all duration-300 transform hover:-translate-y-1"
                         >
                             Browse Tournaments
                         </a>
