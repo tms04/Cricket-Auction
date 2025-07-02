@@ -43,7 +43,7 @@ const LandingPage: React.FC = () => {
             {/* Navigation placeholder */}
             <nav className="w-full max-w-7xl mx-auto py-6 px-4 flex justify-between items-center z-20">
                 <div className="flex items-center space-x-2">
-                    <img src="/image/logo.png" alt="logo" className="w-20 md:w-32 lg:w-40 max-w-full h-auto object-contain" />
+                    <img src="/image/logo2.png" alt="BidKaroo" className="w-20 md:w-32 lg:w-40 max-w-full h-auto object-contain" />
                     {/* <span className="text-xl font-bold text-white">BidKaroo</span> */}
                 </div>
                 <div className="hidden md:flex space-x-6">
@@ -353,7 +353,7 @@ const LandingPage: React.FC = () => {
                                     <path d="M8 12 Q12 15 16 12" stroke="#fff" strokeWidth="1.5" fill="none" />
                                 </svg> */}
                                 {/* <span className="text-lg font-bold text-white">BidKaroo</span> */}
-                                <img src="/image/logo.png" alt="logo" className="w-20 md:w-32 lg:w-40 max-w-full h-auto object-contain" />
+                                <img src="/image/logo2.png" alt="BidKaroo" className="w-20 md:w-32 lg:w-40 max-w-full h-auto object-contain" />
                             </div>
                             <p className="text-gray-400 text-sm leading-relaxed">
                                 The premier platform for professional cricket player auctions and team management.
