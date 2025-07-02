@@ -43,11 +43,8 @@ const LandingPage: React.FC = () => {
             {/* Navigation placeholder */}
             <nav className="w-full max-w-7xl mx-auto py-6 px-4 flex justify-between items-center z-20">
                 <div className="flex items-center space-x-2">
-                    <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <circle cx="16" cy="16" r="12" fill="#E53E3E" stroke="#FFD700" strokeWidth="2" />
-                        <path d="M10 16 Q16 20 22 16" stroke="#fff" strokeWidth="2" fill="none" />
-                    </svg>
-                    <span className="text-xl font-bold text-white">CricketAuction</span>
+                    <img src="/image/logo.png" alt="logo" className="w-20 md:w-32 lg:w-40 max-w-full h-auto object-contain" />
+                    {/* <span className="text-xl font-bold text-white">BidKaroo</span> */}
                 </div>
                 <div className="hidden md:flex space-x-6">
                     <a href="/" className="text-white hover:text-yellow-400 transition-colors">Home</a>
@@ -59,10 +56,10 @@ const LandingPage: React.FC = () => {
                     <a href="/login" className="px-4 py-2 text-sm font-medium text-white bg-yellow-500 rounded-lg hover:bg-yellow-600 transition-colors">Login</a>
                     {/* <a href="/register" className="px-4 py-2 text-sm font-medium text-white border border-yellow-500 rounded-lg hover:bg-yellow-500/10 transition-colors">Register</a> */}
                 </div>
-            </nav>
+            </nav >
 
             {/* Hero Section */}
-            <section className="w-full max-w-7xl mx-auto flex flex-col items-center justify-center pt-24 pb-16 px-4 relative z-20">
+            < section className="w-full max-w-7xl mx-auto flex flex-col items-center justify-center pt-24 pb-16 px-4 relative z-20" >
                 <div className="relative mb-8">
                     <div className="absolute -inset-4 bg-yellow-500/20 rounded-full blur-xl"></div>
                     <div className="relative bg-gradient-to-br from-yellow-400 to-yellow-600 p-3 rounded-full">
@@ -100,7 +97,7 @@ const LandingPage: React.FC = () => {
                         Watch Live
                     </a>
                 </div>
-            </section>
+            </section >
 
             {/* Stats Section */}
             {/* <section className="w-full max-w-7xl mx-auto my-16 px-4 z-20">
@@ -351,11 +348,12 @@ const LandingPage: React.FC = () => {
                         {/* Brand Section */}
                         <div className="space-y-4">
                             <div className="flex items-center space-x-2">
-                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                {/* <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                                     <circle cx="12" cy="12" r="9" fill="#E53E3E" stroke="#FFD700" strokeWidth="1.5" />
                                     <path d="M8 12 Q12 15 16 12" stroke="#fff" strokeWidth="1.5" fill="none" />
-                                </svg>
-                                <span className="text-lg font-bold text-white">CricketAuction</span>
+                                </svg> */}
+                                {/* <span className="text-lg font-bold text-white">BidKaroo</span> */}
+                                <img src="/image/logo.png" alt="logo" className="w-20 md:w-32 lg:w-40 max-w-full h-auto object-contain" />
                             </div>
                             <p className="text-gray-400 text-sm leading-relaxed">
                                 The premier platform for professional cricket player auctions and team management.
@@ -393,7 +391,7 @@ const LandingPage: React.FC = () => {
                     {/* Copyright Section */}
                     <div className="border-t border-gray-800 mt-12 pt-8 text-center">
                         <p className="text-gray-500 text-sm">
-                            &copy; {new Date().getFullYear()} Cricket Auction Platform. All rights reserved.
+                            &copy; BidKaroo Auction Platform. All rights reserved.
                         </p>
                     </div>
                 </div>
@@ -407,7 +405,7 @@ const LandingPage: React.FC = () => {
                 }
                 .animate-fade-in-up { animation: fade-in-up 0.8s ease-out forwards; }
             `}</style>
-        </div>
+        </div >
     );
 };
 
