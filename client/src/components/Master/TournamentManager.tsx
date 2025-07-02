@@ -191,7 +191,7 @@ const TournamentManager: React.FC = () => {
       <div className="flex justify-between items-center">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Tournament Management</h2>
-          <p className="text-gray-600">Create and manage cricket tournaments</p>
+          <p className="text-gray-600">Create and manage tournaments</p>
         </div>
         <button
           onClick={() => {

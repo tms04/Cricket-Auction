@@ -59,7 +59,7 @@ const LoginForm: React.FC = () => {
               <Trophy className="w-8 h-8 text-white" />
             </div>
           </div>
-          <h2 className="mt-6 text-3xl font-bold text-gray-900">Cricket Auction System</h2>
+          <h2 className="mt-6 text-3xl font-bold text-gray-900">BidKaroo Auction System</h2>
           <p className="mt-2 text-sm text-gray-600">Professional Player Auction Platform</p>
         </div>
 

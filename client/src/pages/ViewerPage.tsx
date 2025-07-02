@@ -44,10 +44,10 @@ const ViewerPage: React.FC = () => {
                 {/* Header */}
                 <div className="text-center mb-12">
                     <h1 className="text-5xl md:text-6xl font-extrabold text-white mb-4 drop-shadow-lg">
-                        Professional Cricket Auctions
+                        Professional Auctions
                     </h1>
                     <p className="text-xl md:text-2xl text-gray-200 max-w-2xl mx-auto">
-                        Build your dream cricket team through competitive auctions
+                        Build your dream team through competitive auctions
                     </p>
 
                     {/* Stats Section */}
@@ -205,9 +205,9 @@ const ViewerPage: React.FC = () => {
                             <circle cx="12" cy="12" r="4" fill="currentColor" />
                         </svg>
                     </div>
-                    <span>&copy; {new Date().getFullYear()} Cricket Auction Championship. All rights reserved.</span>
+                    <span>&copy; BidKaroo Auction Championship. All rights reserved.</span>
                 </div>
-                <p className="text-sm text-gray-300">Experience the ultimate cricket auction platform</p>
+                <p className="text-sm text-gray-300">Experience the ultimate auction platform</p>
             </footer>
 
             {/* Animations */}

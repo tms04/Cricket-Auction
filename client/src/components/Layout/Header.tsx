@@ -23,11 +23,11 @@ const Header: React.FC = () => {
               <Trophy className="w-6 h-6 text-white" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-gray-900">Cricket Auction</h1>
+              <h1 className="text-xl font-bold text-gray-900">BidKaroo Auction</h1>
               <p className="text-sm text-gray-500">Professional Player Auction System</p>
             </div>
           </div>
-          
+
           <div className="flex items-center space-x-4">
             <div className="flex items-center space-x-3">
               <div className="flex items-center justify-center w-8 h-8 bg-gray-100 rounded-full">
@@ -40,7 +40,7 @@ const Header: React.FC = () => {
                 </span>
               </div>
             </div>
-            
+
             <button
               onClick={logout}
               className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50 rounded-lg transition-colors"

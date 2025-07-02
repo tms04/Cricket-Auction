@@ -43,7 +43,7 @@ const LandingPage: React.FC = () => {
             {/* Navigation placeholder */}
             <nav className="w-full max-w-7xl mx-auto py-6 px-4 flex justify-between items-center z-20">
                 <div className="flex items-center space-x-2">
-                    <img src="/image/logo2.png" alt="BidKaroo" className="w-20 md:w-32 lg:w-40 max-w-full h-auto object-contain" />
+                    <img src="/image/logo2.png" alt="BidKaroo" className="w-40 md:w-48 lg:w-60 max-w-full h-auto object-contain" />
                     {/* <span className="text-xl font-bold text-white">BidKaroo</span> */}
                 </div>
                 <div className="hidden md:flex space-x-6">
@@ -73,12 +73,12 @@ const LandingPage: React.FC = () => {
 
                 <h1 className="text-4xl md:text-6xl font-bold text-center text-white mb-6 leading-tight">
                     <span className="bg-clip-text text-transparent bg-gradient-to-r from-yellow-400 via-yellow-300 to-yellow-500">
-                        Professional Cricket Auctions
+                        Professional Auctions
                     </span>
                 </h1>
 
                 <p className="text-xl md:text-2xl text-gray-300 text-center max-w-3xl mb-10 leading-relaxed">
-                    Build your dream cricket team through competitive auctions. Join professional tournaments and compete with the best.
+                    Build your dream team through competitive auctions. Join professional tournaments and compete with the best.
                 </p>
 
                 <div className="flex flex-col sm:flex-row gap-6 justify-center w-full max-w-md">
@@ -136,7 +136,7 @@ const LandingPage: React.FC = () => {
                             <Trophy className="w-6 h-6 text-white" />
                         </div>
                         <h3 className="text-xl font-bold text-white mb-3">Tournament Management</h3>
-                        <p className="text-gray-300">Create and manage cricket tournaments with custom rules, budgets, and team configurations.</p>
+                        <p className="text-gray-300">Create and manage tournaments with custom rules, budgets, and team configurations.</p>
                     </div>
 
                     <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl p-8 border border-gray-700 hover:border-yellow-500/50 transition-all duration-300 group">
@@ -322,7 +322,7 @@ const LandingPage: React.FC = () => {
 
                     <h2 className="text-3xl md:text-4xl font-bold text-white mb-6">Ready to Join the Action?</h2>
                     <p className="text-xl text-gray-300 mb-8 max-w-2xl mx-auto">
-                        Register now and start building your championship-winning cricket team today.
+                        Register now and start building your championship-winning team today.
                     </p>
                     <div className="flex flex-col sm:flex-row gap-4 justify-center">
                         {/* <a
@@ -353,10 +353,10 @@ const LandingPage: React.FC = () => {
                                     <path d="M8 12 Q12 15 16 12" stroke="#fff" strokeWidth="1.5" fill="none" />
                                 </svg> */}
                                 {/* <span className="text-lg font-bold text-white">BidKaroo</span> */}
-                                <img src="/image/logo2.png" alt="BidKaroo" className="w-20 md:w-32 lg:w-40 max-w-full h-auto object-contain" />
+                                <img src="/image/logo2.png" alt="BidKaroo" className="w-40 md:w-48 lg:w-60 max-w-full h-auto object-contain" />
                             </div>
                             <p className="text-gray-400 text-sm leading-relaxed">
-                                The premier platform for professional cricket player auctions and team management.
+                                The premier platform for professional player auctions and team management.
                             </p>
                         </div>
 
@@ -370,7 +370,7 @@ const LandingPage: React.FC = () => {
                                     </a>
                                 </li>
                                 <li>
-                                    <a href="/tournaments" className="text-gray-400 hover:text-yellow-400 transition-colors text-sm">
+                                    <a href="/viewer" className="text-gray-400 hover:text-yellow-400 transition-colors text-sm">
                                         Tournaments
                                     </a>
                                 </li>

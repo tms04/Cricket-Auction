@@ -498,9 +498,9 @@ const TournamentPage: React.FC = () => {
                                 <circle cx="12" cy="12" r="4" fill="currentColor" />
                             </svg>
                         </div>
-                        <span>&copy; {new Date().getFullYear()} Cricket Auction Championship. All rights reserved.</span>
+                        <span>&copy; BidKaroo Auction Championship. All rights reserved.</span>
                     </div>
-                    <p className="text-xs sm:text-sm text-gray-300">Experience the ultimate cricket auction platform</p>
+                    <p className="text-xs sm:text-sm text-gray-300">Experience the ultimate auction platform</p>
                 </footer>
 
                 {/* Animations */}
