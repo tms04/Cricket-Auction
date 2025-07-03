@@ -228,7 +228,7 @@ const TournamentPage: React.FC = () => {
                                 {liveAuction ? (
                                     <>
                                         <div className="flex justify-center">
-                                            <div className={`relative bg-gradient-to-br rounded-2xl sm:rounded-[2.5rem] shadow-2xl border-4 w-full max-w-sm p-0 overflow-hidden ${getCardColor(getLiveAuctionPlayer(liveAuction)?.primaryRole)}`} style={{ minHeight: '360px' }}>
+                                            <div className={`relative bg-gradient-to-br rounded-2xl sm:rounded-[2.5rem] shadow-2xl border-4 w-full max-w-sm p-0 overflow-hidden ${getCardColor(getLiveAuctionPlayer(liveAuction)?.primaryRole)}`} style={{ minHeight: '300px' }}>
                                                 {/* Top Row: Role, Team Logo */}
                                                 <div className="flex justify-between items-center px-4 sm:px-6 pt-4 sm:pt-6">
                                                     <span className="bg-white/80 rounded-full px-2 sm:px-3 py-1 text-xs font-bold text-yellow-800 shadow">{getLiveAuctionPlayer(liveAuction)?.primaryRole || '-'}</span>
@@ -269,7 +269,7 @@ const TournamentPage: React.FC = () => {
                                                     <div><span className="font-semibold text-gray-700">Age:</span> <span className="text-gray-900">{getLiveAuctionPlayer(liveAuction)?.age || '-'}</span></div>
                                                 </div>
                                                 {/* Stats Box */}
-                                                <div className="absolute bottom-0 left-0 w-full bg-yellow-200/80 py-2 sm:py-3 flex justify-around items-center border-t-2 border-yellow-400">
+                                                <div className="bottom-0 left-0 w-full bg-yellow-200/80 py-2 sm:py-3 flex justify-around items-center border-t-2 border-yellow-400">
                                                     <div className="text-center">
                                                         <div className="text-sm sm:text-base md:text-lg font-bold text-yellow-900">{getLiveAuctionPlayer(liveAuction)?.battingStyle || '-'}</div>
                                                         <div className="text-xs text-yellow-800">BATTING STYLE</div>
