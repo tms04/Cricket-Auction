@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { Trophy, Users, Calendar, Clock, Target, Zap, Circle, Star } from 'lucide-react';
 import { Tournament } from '../types';
 
-const BASE_URL = import.meta.env.VITE_API_URL || 'https://cricket-auction-yvh3.onrender.com';
+const BASE_URL = import.meta.env.VITE_API_URL || 'https://bidkaroo.techgg.org';
 const API_BASE = BASE_URL.endsWith('/api') ? BASE_URL : `${BASE_URL}/api`;
 
 const LandingPage: React.FC = () => {

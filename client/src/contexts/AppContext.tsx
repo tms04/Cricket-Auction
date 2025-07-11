@@ -85,7 +85,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Socket.IO for real-time updates
   useEffect(() => {
-    const s = io('https://cricket-auction-yvh3.onrender.com');
+    const s = io('https://bidkaroo.techgg.org');
     setSocket(s);
     s.on('auctionUpdate', (data) => setAuctions(data.map((a: any) => ({
       ...a,
