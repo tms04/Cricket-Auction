@@ -278,7 +278,8 @@ const AuctionInterface: React.FC = () => {
       const result = await api.markPlayerUnsold(playerId);
       console.log('Mark unsold result:', result);
       showNotification('success', 'Player marked as unsold successfully');
-      // No need to refetch or set local state, context will update automatically via socket
+      // No need to refetch or set local state, context will update automatically via sockey
+      // t
     } catch (error: any) {
       console.error('Error marking player as unsold:', error);
       const errorMessage = error.response?.data?.error || error.message || 'Failed to mark player as unsold';
@@ -394,32 +395,15 @@ const AuctionInterface: React.FC = () => {
                 <div key={player.id} className="bg-gray-50 rounded-lg p-4 hover:bg-gray-100 transition-colors cursor-pointer" onClick={() => startSelectedPlayerAuction(player.id)}>
                   <div className="flex items-center space-x-3 mb-3">
                     <div className="w-10 h-10 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-full flex items-center justify-center overflow-hidden">
-                      {player.photo ? (
-                        <img
-                          src={player.photo}
-                          alt={player.name}
-                          className="w-full h-full object-cover"
-                          onError={(e) => {
-                            const target = e.target as HTMLImageElement;
-                            target.style.display = 'none';
-                            target.nextElementSibling?.classList.remove('hidden');
-                          }}
-                        />
-                      ) : <User className="w-4 h-4 text-white" />}
+                      <span className="w-4 h-4 text-white font-bold text-lg">{player.name[0]}</span>
                     </div>
                     <div>
                       <h4 className="font-medium text-gray-900">{player.name}</h4>
-                      <p className="text-sm text-gray-600">{player.role}</p>
+                      {/* role is not guaranteed in summary, so skip or check existence */}
                     </div>
                   </div>
                   <div className="text-sm text-gray-600">
                     <p>Base Price: {formatCurrency(player.basePrice || 0)}</p>
-                    {player.station && (
-                      <div className="flex items-center space-x-1 mt-1">
-                        <MapPin className="w-3 h-3" />
-                        <span>{player.station}</span>
-                      </div>
-                    )}
                   </div>
                 </div>
               ))}
@@ -660,13 +644,10 @@ const AuctionInterface: React.FC = () => {
                         style={{ borderLeftColor: team.color }}>
                         <div className="flex items-center space-x-3">
                           <div className="w-8 h-8 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-full flex items-center justify-center overflow-hidden">
-                            {player.photo ? (
-                              <img src={player.photo} alt={player.name} className="w-full h-full object-cover" />
-                            ) : <User className="w-4 h-4 text-white" />}
+                            <span className="w-4 h-4 text-white font-bold text-lg">{player.name[0]}</span>
                           </div>
                           <div>
                             <div className="font-medium text-gray-900">{player.name}</div>
-                            <div className="text-xs text-gray-600">{player.role}</div>
                             <div className="text-xs font-semibold" style={{ color: team.color }}>
                               Price: {formatCurrency(player.price || 0)}
                             </div>

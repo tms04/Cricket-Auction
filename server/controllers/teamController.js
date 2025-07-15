@@ -1,6 +1,5 @@
 const Team = require('../models/team');
 const Tournament = require('../models/tournament');
-const { io } = require('../index');
 
 // Helper to get auctioneer's tournament
 async function getAuctioneerTournament(email) {
@@ -38,7 +37,6 @@ exports.createTeam = async (req, res) => {
         const newTeam = new Team(req.body);
         const savedTeam = await newTeam.save();
         const teams = await Team.find().populate('players');
-        io.emit('teamUpdate', teams);
         res.status(201).json(savedTeam);
     } catch (err) {
         res.status(400).json({ error: err.message });
@@ -55,8 +53,6 @@ exports.updateTeam = async (req, res) => {
         }
         const updatedTeam = await Team.findByIdAndUpdate(req.params.id, req.body, { new: true }).populate('players');
         if (!updatedTeam) return res.status(404).json({ error: 'Team not found' });
-        const teams = await Team.find().populate('players');
-        io.emit('teamUpdate', teams);
         res.json(updatedTeam);
     } catch (err) {
         res.status(400).json({ error: err.message });
@@ -74,8 +70,6 @@ exports.deleteTeam = async (req, res) => {
         }
         const deletedTeam = await Team.findByIdAndDelete(req.params.id);
         if (!deletedTeam) return res.status(404).json({ error: 'Team not found' });
-        const teams = await Team.find().populate('players');
-        io.emit('teamUpdate', teams);
         res.json({ message: 'Team deleted' });
     } catch (err) {
         res.status(500).json({ error: err.message });

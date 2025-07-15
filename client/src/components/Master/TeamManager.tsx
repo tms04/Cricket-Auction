@@ -264,7 +264,7 @@ const TeamManager: React.FC = () => {
                             <span className="font-medium text-gray-700">{player.name}</span>
                           </div>
                           <div className="flex items-center space-x-2">
-                            <span className="text-gray-500 text-xs">({player.role})</span>
+                            {/* role is not guaranteed in summary, so skip or check existence */}
                             <span className="font-semibold" style={{ color: team.color }}>
                               {formatCurrency(player.price || 0)}
                             </span>

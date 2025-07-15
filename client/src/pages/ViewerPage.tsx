@@ -1,13 +1,21 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useApp } from '../contexts/AppContext';
 import { useNavigate } from 'react-router-dom';
 import { Clock, CheckCircle, Trophy, ArrowRight, Zap } from 'lucide-react';
 
 const ViewerPage: React.FC = () => {
-    const { tournaments, auctions, teams, players, isLoading } = useApp();
+    const { tournaments, auctions, teams, players, isLoading, fetchAuctions } = useApp();
     const [auctionTab, setAuctionTab] = useState<'ongoing' | 'completed'>('ongoing');
     const navigate = useNavigate();
     const prevPlayerId = useRef<string | null>(null);
+
+    // Poll for auction updates every 2 seconds
+    useEffect(() => {
+        const interval = setInterval(() => {
+            if (fetchAuctions) fetchAuctions();
+        }, 2000);
+        return () => clearInterval(interval);
+    }, [fetchAuctions]);
 
     // Filter tournaments by status
     const ongoingTournaments = tournaments.filter(t => t.status !== 'completed');

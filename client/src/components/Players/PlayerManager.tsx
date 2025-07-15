@@ -449,27 +449,13 @@ const PlayerManager: React.FC = () => {
             <div className="flex justify-between items-start mb-4">
               <div className="flex items-center space-x-3">
                 <div className="w-12 h-12 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-full flex items-center justify-center overflow-hidden">
-                  {player.photo ? (
-                    <img
-                      src={player.photo}
-                      alt={player.name}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : <User className="w-6 h-6 text-white" />}
+                  <span className="w-6 h-6 text-white font-bold text-lg">{player.name[0]}</span>
                 </div>
                 <div>
                   <h3 className="font-semibold text-gray-900">{player.name}</h3>
-                  {player.primaryRole && (
-                    <div className="text-sm text-gray-500 mt-1">{player.primaryRole}</div>
-                  )}
+                  {/* role is not guaranteed in summary, so skip or check existence */}
                   {player.team && (
                     <p className="text-sm text-gray-600">{player.team}</p>
-                  )}
-                  {player.nearestRailwayStation && (
-                    <div className="flex items-center space-x-1 text-xs text-gray-500 mt-1">
-                      <MapPin className="w-3 h-3" />
-                      <span>{player.nearestRailwayStation}</span>
-                    </div>
                   )}
                 </div>
               </div>

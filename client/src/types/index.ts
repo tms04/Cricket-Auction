@@ -110,5 +110,6 @@ export interface AppContextType {
   resetPlayerStatuses: () => Promise<void>;
   fetchTeams?: () => Promise<void>;
   fetchPlayers?: () => Promise<void>;
+  fetchAuctions?: () => Promise<void>;
   socket?: any;
 }

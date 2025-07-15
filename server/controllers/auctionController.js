@@ -2,7 +2,6 @@ const Auction = require('../models/auction');
 const Tournament = require('../models/tournament');
 const Team = require('../models/team');
 const Player = require('../models/player');
-const { io } = require('../index');
 
 // Helper to get auctioneer's tournament
 async function getAuctioneerTournament(email) {
@@ -60,11 +59,7 @@ exports.createAuction = async (req, res) => {
         const savedAuction = await newAuction.save();
         console.log('Auction saved successfully:', savedAuction);
         const auctions = await Auction.find().populate('player team currentBidder winner bids.team');
-        io.emit('auctionUpdate', auctions);
-        const auctionObj = savedAuction.toObject ? savedAuction.toObject() : savedAuction;
-        auctionObj.playerId = auctionObj.player ? String(auctionObj.player) : undefined;
-        delete auctionObj.player;
-        res.status(201).json(auctionObj);
+        res.status(201).json(savedAuction.toObject ? savedAuction.toObject() : savedAuction);
     } catch (err) {
         console.error('Error in createAuction:', err);
         res.status(400).json({ error: err.message });
@@ -124,9 +119,6 @@ exports.placeBid = async (req, res) => {
 
         await auction.save();
 
-        const updatedAuctions = await Auction.find().populate('player team currentBidder winner bids.team');
-        io.emit('auctionUpdate', updatedAuctions);
-
         const auctionObj = auction.toObject ? auction.toObject() : auction;
         auctionObj.playerId = auctionObj.player ? String(auctionObj.player) : undefined;
         delete auctionObj.player;
@@ -150,6 +142,7 @@ exports.completeAuction = async (req, res) => {
             return res.status(400).json({ error: 'Auction is already completed' });
         }
 
+        let updatedTeam = null;
         if (winnerId) {
             // Player was sold
             const team = await Team.findById(winnerId);
@@ -164,6 +157,7 @@ exports.completeAuction = async (req, res) => {
             team.remainingBudget -= saleAmount;
             team.players.push(auction.player);
             await team.save();
+            updatedTeam = team;
 
             // Update player status
             const player = await Player.findById(auction.player);
@@ -191,9 +185,6 @@ exports.completeAuction = async (req, res) => {
         }
 
         await auction.save();
-
-        const updatedAuctions = await Auction.find().populate('player team currentBidder winner bids.team');
-        io.emit('auctionUpdate', updatedAuctions);
 
         const auctionObj = auction.toObject ? auction.toObject() : auction;
         auctionObj.playerId = auctionObj.player ? String(auctionObj.player) : undefined;
@@ -236,7 +227,6 @@ exports.deleteAuction = async (req, res) => {
         const deletedAuction = await Auction.findByIdAndDelete(req.params.id);
         if (!deletedAuction) return res.status(404).json({ error: 'Auction not found' });
         const auctions = await Auction.find().populate('player team currentBidder winner bids.team');
-        io.emit('auctionUpdate', auctions);
         res.json({ message: 'Auction deleted' });
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -247,14 +237,11 @@ exports.resetAuctions = async (req, res) => {
     try {
         const { tournamentId } = req.params;
         await Auction.deleteMany({ tournamentId });
-        // Reset all players
-        const players = await Player.find({ tournamentId });
-        for (const player of players) {
-            player.status = 'available';
-            player.team = undefined;
-            player.price = undefined;
-            await player.save();
-        }
+        // Reset all players efficiently
+        await Player.updateMany(
+            { tournamentId },
+            { $set: { status: 'available', team: null, price: null } }
+        );
         // Reset all teams
         const teams = await Team.find({ tournamentId });
         for (const team of teams) {
@@ -263,8 +250,19 @@ exports.resetAuctions = async (req, res) => {
             await team.save();
         }
         const auctions = await Auction.find();
-        io.emit('auctionUpdate', auctions);
         res.json({ message: 'Auction, players, and teams reset for tournament.' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+};
+
+// Get the current active auction for a tournament
+exports.getCurrentAuction = async (req, res) => {
+    try {
+        const { tournamentId } = req.query;
+        if (!tournamentId) return res.status(400).json({ error: 'tournamentId required' });
+        const auction = await Auction.findOne({ tournamentId, status: 'active' });
+        res.json(auction || null);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

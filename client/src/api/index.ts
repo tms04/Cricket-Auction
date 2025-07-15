@@ -172,4 +172,17 @@ export const markPlayerUnsold = async (playerId: string) => {
 export const fetchPlayerById = async (id: string) => {
     const res = await axios.get(`${API_BASE}/players/${id}`);
     return res.data;
+};
+
+// Fetch only minimal player info for lists
+export const fetchPlayerSummaries = async (tournamentId?: string) => {
+    let url = `${API_BASE}/players/summaries`;
+    if (tournamentId) {
+        url += `?tournamentId=${tournamentId}`;
+    }
+    const res = await axios.get(url);
+    return res.data.map((player: any) => ({
+        ...player,
+        id: player._id || player.id,
+    }));
 }; 

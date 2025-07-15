@@ -1,7 +1,6 @@
 const Player = require('../models/player');
 const Tournament = require('../models/tournament');
 const Team = require('../models/team');
-const { io } = require('../index');
 
 // Helper to get auctioneer's tournament
 async function getAuctioneerTournament(email) {
@@ -41,8 +40,6 @@ exports.createPlayer = async (req, res) => {
         }
         const newPlayer = new Player(req.body);
         const savedPlayer = await newPlayer.save();
-        // const players = await Player.find();
-        // io.emit('playerUpdate', players);
         res.status(201).json(savedPlayer);
     } catch (err) {
         res.status(400).json({ error: err.message });
@@ -59,8 +56,6 @@ exports.updatePlayer = async (req, res) => {
         }
         const updatedPlayer = await Player.findByIdAndUpdate(req.params.id, req.body, { new: true });
         if (!updatedPlayer) return res.status(404).json({ error: 'Player not found' });
-        // const players = await Player.find();
-        // io.emit('playerUpdate', players);
         res.json(updatedPlayer);
     } catch (err) {
         res.status(400).json({ error: err.message });
@@ -78,8 +73,6 @@ exports.deletePlayer = async (req, res) => {
         }
         const deletedPlayer = await Player.findByIdAndDelete(req.params.id);
         if (!deletedPlayer) return res.status(404).json({ error: 'Player not found' });
-        // const players = await Player.find();
-        // io.emit('playerUpdate', players);
         res.json({ message: 'Player deleted' });
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -126,11 +119,22 @@ exports.markUnsold = async (req, res) => {
         const teams = await Team.find();
         console.log('Emitting playerUpdate with', players.length, 'players');
         console.log('Emitting teamUpdate with', teams.length, 'teams');
-        io.emit('playerUpdate', players);
-        io.emit('teamUpdate', teams);
         res.json({ player, team: updatedTeam });
     } catch (err) {
         console.error('Error in markUnsold:', err);
         res.status(500).json({ error: err.message });
+    }
+};
+
+// Lightweight: only name, id, basePrice, team, status, tournamentId
+exports.getPlayerSummaries = async (req, res) => {
+    try {
+        const { tournamentId } = req.query;
+        const filter = tournamentId ? { tournamentId } : {};
+        // Add price to the projection
+        const players = await Player.find(filter, '_id name basePrice price team status tournamentId');
+        res.json(players);
+    } catch (err) {
+        res.status(500).json({ error: 'Server error' });
     }
 }; 

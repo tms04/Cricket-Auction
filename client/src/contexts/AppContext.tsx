@@ -24,7 +24,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     ) || null;
   }, [user, tournaments]);
 
-  // Fetch all data from backend on mount
+  // Fetch all data from backend on mount or when user id changes
   useEffect(() => {
     const fetchAll = async () => {
       setIsLoading(true);
@@ -45,10 +45,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
 
         // Only fetch teams, players, and auctions if user is present
-        if (user) {
+        if (user && user.id) {
           const [teamsData, playersData, auctionsData] = await Promise.all([
             api.fetchTeams(),
-            api.fetchPlayers(),
+            api.fetchPlayerSummaries(),
             api.fetchAuctions()
           ]);
           setTeams(teamsData.map((t: any) => ({
@@ -81,42 +81,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     };
     fetchAll();
-  }, [user]);
-
-  // Socket.IO for real-time updates
-  useEffect(() => {
-    const s = io('https://bidkaroo.techgg.org');
-    setSocket(s);
-    s.on('auctionUpdate', (data) => setAuctions(data.map((a: any) => ({
-      ...a,
-      id: a._id || a.id,
-      currentBidder: typeof a.currentBidder === 'object' && a.currentBidder !== null
-        ? a.currentBidder._id || a.currentBidder.id
-        : a.currentBidder
-    }))));
-    s.on('playerUpdate', (data) => {
-      if (Array.isArray(data) && data.length > 0) {
-        setPlayers(data.map((p: any) => ({
-          ...p,
-          id: p._id || p.id
-        })));
-      } else {
-        setPlayers([]);
-      }
-    });
-    s.on('teamUpdate', (data) => setTeams(data.map((t: any) => ({
-      ...t,
-      id: t._id || t.id
-    }))));
-    s.on('tournamentUpdate', (data) => setTournaments(data.map((t: any) => ({
-      ...t,
-      id: t._id,
-      maxTeams: Number(t.maxTeams),
-      budget: Number(t.budget),
-      status: t.status || 'upcoming'
-    }))));
-    return () => { s.disconnect(); };
-  }, []);
+  }, [user?.id]);
 
   // Backend CRUD operations
   const addTournament = async (tournament: Omit<Tournament, 'id' | 'createdAt'>) => {
@@ -177,7 +142,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const addPlayer = async (player: Omit<Player, 'id'>) => {
     const newPlayer = await api.createPlayer(player);
     // Refetch the full list to ensure state is in sync with backend
-    const playersData = await api.fetchPlayers();
+    const playersData = await api.fetchPlayerSummaries();
     setPlayers(playersData.map((p: any) => ({
       ...p,
       id: p._id || p.id
@@ -188,7 +153,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const updatePlayer = async (id: string, updates: Partial<Player>) => {
     await api.updatePlayer(id, updates);
     // Refetch the full list to ensure state is in sync with backend
-    const playersData = await api.fetchPlayers();
+    const playersData = await api.fetchPlayerSummaries();
     setPlayers(playersData.map((p: any) => ({
       ...p,
       id: p._id || p.id
@@ -197,7 +162,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const deletePlayer = async (id: string) => {
     await api.deletePlayer(id);
     // Refetch the full list to ensure state is in sync with backend
-    const playersData = await api.fetchPlayers();
+    const playersData = await api.fetchPlayerSummaries();
     setPlayers(playersData.map((p: any) => ({
       ...p,
       id: p._id || p.id
@@ -309,8 +274,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setTeams(teamsData.map((t: any) => ({ ...t, id: t._id || t.id })));
   };
   const fetchPlayers = async () => {
-    const playersData = await api.fetchPlayers();
+    const playersData = await api.fetchPlayerSummaries();
     setPlayers(playersData.map((p: any) => ({ ...p, id: p._id || p.id })));
+  };
+
+  // Fetch auctions for polling (public)
+  const fetchAuctions = async () => {
+    const auctionsData = await api.fetchAuctions();
+    setAuctions(auctionsData.map((a: any) => ({
+      ...a,
+      id: a._id || a.id,
+      currentBidder: typeof a.currentBidder === 'object' && a.currentBidder !== null
+        ? a.currentBidder._id || a.currentBidder.id
+        : a.currentBidder
+    })));
   };
 
   if (isLoading) {
@@ -348,7 +325,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       completeAuction,
       resetPlayerStatuses,
       fetchTeams,
-      fetchPlayers
+      fetchPlayers,
+      fetchAuctions
     }}>
       {children}
     </AppContext.Provider>

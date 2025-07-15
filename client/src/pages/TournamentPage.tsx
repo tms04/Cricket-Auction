@@ -3,29 +3,87 @@ import { useParams } from 'react-router-dom';
 import { useApp } from '../contexts/AppContext';
 import { Gavel, Menu, X } from 'lucide-react'; // Added Menu and X icons for mobile nav
 import Confetti from 'react-confetti';
+import * as api from '../api';
 
 const TournamentPage: React.FC = () => {
     const { id } = useParams<{ id: string }>();
-    const { tournaments, auctions, teams, players, socket, fetchTeams, fetchPlayers } = useApp();
+    const { tournaments, teams, players, fetchTeams, fetchPlayers } = useApp();
     const [tab, setTab] = useState<'live' | 'sold' | 'available' | 'unsold' | 'teams'>('live');
     const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
     const [showSoldAnimation, setShowSoldAnimation] = useState(false);
     const [showUnsoldAnimation, setShowUnsoldAnimation] = useState(false);
     const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
     const soldTimeoutRef = useRef<number | null>(null);
-    const prevLiveAuctionRef = useRef<typeof liveAuction | null>(null);
+    const prevLiveAuctionRef = useRef<any | null>(null);
     const tournament = tournaments.find(t => t.id === id);
     if (!tournament) return <div className="p-6">Tournament not found.</div>;
 
-    const tournamentAuctions = auctions.filter(a => a.tournamentId === id);
-    const liveAuction = tournamentAuctions.find(a => a.status === 'active');
-    const auctionHistory = tournamentAuctions.filter(a => a.status === 'sold' || a.status === 'unsold').sort((a, b) => new Date(b.endTime || '').getTime() - new Date(a.endTime || '').getTime());
+    // REST polling for current auction and live bid updates
+    const [liveAuction, setLiveAuction] = useState<any>(null);
+    const [prevAuction, setPrevAuction] = useState<any>(null);
+    const [hadBid, setHadBid] = useState(false);
+    useEffect(() => {
+        console.log('[Polling Effect] Running. tab:', tab);
+        let interval: any;
+        const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+        const fetchCurrentAuction = async () => {
+            console.log('[Polling] fetchCurrentAuction called');
+            try {
+                const res = await fetch(`${API_BASE}/api/auctions/current?tournamentId=${id}`);
+                const data = await res.json();
+                console.log('[Polling] Fetched live auction:', data); // Log every 2 seconds
+                // Detect status change for animation
+                if (prevAuction && prevAuction.status === 'active' && (!data || data.status !== 'active')) {
+                    if (hadBid) setShowSoldAnimation(true);
+                    else setShowUnsoldAnimation(true);
+                    setTimeout(() => {
+                        setShowSoldAnimation(false);
+                        setShowUnsoldAnimation(false);
+                    }, 2500);
+                    setHadBid(false);
+                }
+                // Track if there was at least one bid
+                if (data && data.status === 'active' && (data.currentBid > 0 || data.bidAmount > 0 || data.currentBidder)) {
+                    setHadBid(true);
+                }
+                setPrevAuction(data);
+                setLiveAuction(data);
+            } catch (err) {
+                console.error('[Polling] Error fetching live auction:', err);
+                setLiveAuction(null);
+            }
+        };
+        if (tab === 'live') {
+            fetchCurrentAuction(); // Fetch immediately on tab switch
+            interval = setInterval(fetchCurrentAuction, 2000); // Continue polling every 2 seconds
+        } else {
+            setLiveAuction(null);
+        }
+        return () => interval && clearInterval(interval);
+    }, [tab, id, prevAuction, hadBid]);
+
+    // Since we now use polling for liveAuction, set auctionHistory to an empty array or fetch from backend if needed
+    const auctionHistory: any[] = [];
     const tournamentTeams = teams.filter(t => t.tournamentId === id);
     const getPlayer = (playerId: string) => players.find(p => p.id === playerId);
     const getTeam = (teamId: string) => teams.find(t => t.id === teamId);
+    const [liveAuctionPlayer, setLiveAuctionPlayer] = useState<any>(null);
 
     useEffect(() => {
         setLastUpdated(new Date());
+    }, [liveAuction]);
+
+    useEffect(() => {
+        let playerId = liveAuction?.playerId || liveAuction?.player;
+        if (typeof playerId === 'string' && playerId) {
+            api.fetchPlayerById(playerId).then(player => {
+                setLiveAuctionPlayer(player);
+            }).catch(err => {
+                setLiveAuctionPlayer(null);
+            });
+        } else {
+            setLiveAuctionPlayer(null);
+        }
     }, [liveAuction]);
 
     // Detect when liveAuction transitions from active to undefined (sold or unsold)
@@ -56,14 +114,6 @@ const TournamentPage: React.FC = () => {
             if (soldTimeoutRef.current) clearTimeout(soldTimeoutRef.current);
         };
     }, []);
-
-    useEffect(() => {
-        if (!socket) return;
-        socket.on('auctionUpdate', (data: any) => {
-            // Auctions are managed by context, so no setAuctions here
-        });
-        return () => socket.off('auctionUpdate');
-    }, [socket]);
 
     // Helper to get the player for the live auction (handles both playerId and player object)
     const getLiveAuctionPlayer = (auction: any) => {
@@ -108,6 +158,9 @@ const TournamentPage: React.FC = () => {
         setIsMobileNavOpen(false);
     }, [tab]);
 
+    // Debug: Log players before rendering Sold Players
+    console.log('Sold Players:', players.filter(p => p.status === 'sold'));
+
     return (
         <div className="min-h-screen w-full flex flex-col items-center justify-start relative overflow-x-hidden bg-gradient-to-br from-[#0a1026] via-[#1a223f] to-[#232946]">
             {/* Mobile Nav Toggle Button */}
@@ -121,18 +174,22 @@ const TournamentPage: React.FC = () => {
             {/* Mobile Navigation */}
             <div className={`fixed inset-0 z-40 bg-[#232946]/95 backdrop-blur-md transition-all duration-300 md:hidden flex flex-col items-center justify-center ${isMobileNavOpen ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-full pointer-events-none'}`}>
                 <div className="flex flex-col items-center gap-6 w-full px-4">
-                    {(['live', 'sold', 'available', 'unsold', 'teams'] as const).map((tabName) => (
+                    {[
+                        { value: 'live', label: 'Live Auction' },
+                        { value: 'sold', label: 'Sold' },
+                        { value: 'available', label: 'Available' },
+                        { value: 'unsold', label: 'Unsold' },
+                        { value: 'teams', label: 'Teams & Players' }
+                    ].map((tabOption) => (
                         <button
-                            key={tabName}
-                            className={`w-full max-w-xs text-center py-4 rounded-xl font-bold text-xl transition-all ${tab === tabName
+                            key={tabOption.value}
+                            className={`w-full max-w-xs text-center py-4 rounded-xl font-bold text-xl transition-all ${tab === tabOption.value
                                 ? 'bg-gradient-to-r from-yellow-400 via-orange-400 to-red-400 text-[#232946] shadow-[0_0_20px_2px_rgba(255,215,0,0.25)]'
                                 : 'text-yellow-200 hover:text-yellow-100 bg-white/10'
                                 }`}
-                            onClick={() => setTab(tabName)}
+                            onClick={() => setTab(tabOption.value as typeof tab)}
                         >
-                            {tabName === 'live' ? 'Live Auction' :
-                                tabName === 'teams' ? 'Teams & Players' :
-                                    tabName.charAt(0).toUpperCase() + tabName.slice(1)}
+                            {tabOption.label}
                         </button>
                     ))}
                 </div>
@@ -198,19 +255,23 @@ const TournamentPage: React.FC = () => {
                 {/* Tab Navigation - Desktop */}
                 <div className="hidden md:flex justify-center mb-8 sm:mb-12">
                     <div className="inline-flex bg-gradient-to-r from-yellow-400/10 via-orange-400/10 to-red-400/10 backdrop-blur-sm rounded-xl p-1 border-2 border-yellow-400/30 shadow">
-                        {(['live', 'sold', 'available', 'unsold', 'teams'] as const).map((tabName) => (
+                        {[
+                            { value: 'live', label: 'Live Auction' },
+                            { value: 'sold', label: 'Sold' },
+                            { value: 'available', label: 'Available' },
+                            { value: 'unsold', label: 'Unsold' },
+                            { value: 'teams', label: 'Teams & Players' }
+                        ].map((tabOption) => (
                             <button
-                                key={tabName}
-                                className={`flex items-center px-4 sm:px-6 md:px-8 py-2 sm:py-3 md:py-4 rounded-xl font-bold text-sm sm:text-base md:text-lg transition-all ${tab === tabName
+                                key={tabOption.value}
+                                className={`flex items-center px-4 sm:px-6 md:px-8 py-2 sm:py-3 md:py-4 rounded-xl font-bold text-sm sm:text-base md:text-lg transition-all ${tab === tabOption.value
                                     ? 'bg-gradient-to-r from-yellow-400 via-orange-400 to-red-400 text-[#232946] shadow-[0_0_20px_2px_rgba(255,215,0,0.25)]' +
-                                    (tabName === 'live' ? ' animate-pulse-fast' : '')
+                                    (tabOption.value === 'live' ? ' animate-pulse-fast' : '')
                                     : 'text-yellow-200 hover:text-yellow-100'
                                     }`}
-                                onClick={() => setTab(tabName)}
+                                onClick={() => setTab(tabOption.value as typeof tab)}
                             >
-                                {tabName === 'live' ? 'Live Auction' :
-                                    tabName === 'teams' ? 'Teams & Players' :
-                                        tabName.charAt(0).toUpperCase() + tabName.slice(1)}
+                                {tabOption.label}
                             </button>
                         ))}
                     </div>
@@ -228,10 +289,10 @@ const TournamentPage: React.FC = () => {
                                 {liveAuction ? (
                                     <>
                                         <div className="flex justify-center">
-                                            <div className={`relative bg-gradient-to-br rounded-2xl sm:rounded-[2.5rem] shadow-2xl border-4 w-full max-w-sm p-0 overflow-hidden ${getCardColor(getLiveAuctionPlayer(liveAuction)?.primaryRole)}`} style={{ minHeight: '300px' }}>
+                                            <div className={`relative bg-gradient-to-br rounded-2xl sm:rounded-[2.5rem] shadow-2xl border-4 w-full max-w-sm p-0 overflow-hidden ${getCardColor(liveAuctionPlayer?.primaryRole)}`} style={{ minHeight: '300px' }}>
                                                 {/* Top Row: Role, Team Logo */}
                                                 <div className="flex justify-between items-center px-4 sm:px-6 pt-4 sm:pt-6">
-                                                    <span className="bg-white/80 rounded-full px-2 sm:px-3 py-1 text-xs font-bold text-yellow-800 shadow">{getLiveAuctionPlayer(liveAuction)?.primaryRole || '-'}</span>
+                                                    <span className="bg-white/80 rounded-full px-2 sm:px-3 py-1 text-xs font-bold text-yellow-800 shadow">{liveAuctionPlayer?.primaryRole || '-'}</span>
                                                     <div className="flex items-center gap-2">
                                                         {getTeam(getLiveAuctionBidder(liveAuction))?.logo && (
                                                             <img src={getTeam(getLiveAuctionBidder(liveAuction))?.logo} alt="team" className="w-6 sm:w-8 h-6 sm:h-8 rounded-full border-2 border-white shadow" />
@@ -240,42 +301,42 @@ const TournamentPage: React.FC = () => {
                                                 </div>
                                                 {/* Player Photo */}
                                                 <div className="flex justify-center mt-2">
-                                                    {getLiveAuctionPlayer(liveAuction)?.photo ? (
+                                                    {liveAuctionPlayer?.photo ? (
                                                         <img
-                                                            src={getLiveAuctionPlayer(liveAuction)?.photo}
-                                                            alt={getLiveAuctionPlayer(liveAuction)?.name}
+                                                            src={liveAuctionPlayer.photo}
+                                                            alt={liveAuctionPlayer.name}
                                                             className="rounded-full object-cover w-20 h-20 sm:w-24 sm:h-24 md:w-32 md:h-32 lg:w-40 lg:h-40 max-w-[40vw] max-h-[40vw] border-4 border-yellow-300 shadow-xl"
                                                             style={{ background: 'none', boxShadow: 'none' }}
                                                         />
                                                     ) : (
                                                         <div className="rounded-full flex items-center justify-center w-20 h-20 sm:w-24 sm:h-24 md:w-32 md:h-32 lg:w-40 lg:h-40 max-w-[40vw] max-h-[40vw] bg-yellow-400 text-4xl sm:text-5xl font-extrabold text-gray-400 border-4 border-yellow-300 shadow-xl">
-                                                            {getLiveAuctionPlayer(liveAuction)?.name?.[0] || '?'}
+                                                            {liveAuctionPlayer?.name?.[0] || '?'}
                                                         </div>
                                                     )}
                                                 </div>
                                                 {/* Player Name */}
                                                 <div className="text-center mt-2 sm:mt-4">
-                                                    <h2 className="text-xl sm:text-2xl font-extrabold text-gray-900">{getLiveAuctionPlayer(liveAuction)?.name || '-'}</h2>
+                                                    <h2 className="text-xl sm:text-2xl font-extrabold text-gray-900">{liveAuctionPlayer ? liveAuctionPlayer.name : '-'}</h2>
                                                     <div className="text-base sm:text-lg font-bold text-yellow-900 mt-1">
-                                                        <div><span className="font-bold">Current Bid:</span> <span className="text-gray-900">₹{getLiveAuctionBid(liveAuction) ?? '-'}</span></div>
-                                                        <div><span className="font-bold">Current Bidder:</span> <span className={`text-gray-900 font-bold ${getTeam(getLiveAuctionBidder(liveAuction)) ? 'border-2 border-yellow-400 rounded px-1 sm:px-2 py-0 sm:py-1 shadow animate-pulse-fast' : ''}`}>{getTeam(getLiveAuctionBidder(liveAuction))?.name || '-'}</span></div>
+                                                        <div><span className="font-bold">Current Bid:</span> <span className="text-gray-900">₹{liveAuctionPlayer ? getLiveAuctionBid(liveAuction) : '-'}</span></div>
+                                                        <div><span className="font-bold">Current Bidder:</span> <span className={`text-gray-900 font-bold ${getTeam(getLiveAuctionBidder(liveAuction)) ? 'border-2 border-yellow-400 rounded px-1 sm:px-2 py-0 sm:py-1 shadow animate-pulse-fast' : ''}`}>{liveAuctionPlayer ? getTeam(getLiveAuctionBidder(liveAuction))?.name : '-'}</span></div>
                                                     </div>
                                                 </div>
                                                 {/* Info Grid */}
                                                 <div className="grid grid-cols-2 gap-x-2 sm:gap-x-4 gap-y-1 px-4 sm:px-6 md:px-8 mt-2 sm:mt-4 text-xs sm:text-sm">
-                                                    <div>Base Price: ₹{getLiveAuctionPlayer(liveAuction)?.basePrice ?? '-'}</div>
-                                                    <div><span className="font-semibold text-gray-700">Station:</span> <span className="text-gray-900">{getLiveAuctionPlayer(liveAuction)?.station || '-'}</span></div>
-                                                    <div><span className="font-semibold text-gray-700">Previous Team:</span> <span className="text-gray-900">{getLiveAuctionPlayer(liveAuction)?.previousYearTeam || '-'}</span></div>
-                                                    <div><span className="font-semibold text-gray-700">Age:</span> <span className="text-gray-900">{getLiveAuctionPlayer(liveAuction)?.age || '-'}</span></div>
+                                                    <div>Base Price: ₹{liveAuctionPlayer?.basePrice ?? '-'}</div>
+                                                    <div><span className="font-semibold text-gray-700">Station:</span> <span className="text-gray-900">{liveAuctionPlayer?.station || '-'}</span></div>
+                                                    <div><span className="font-semibold text-gray-700">Previous Team:</span> <span className="text-gray-900">{liveAuctionPlayer?.previousYearTeam || '-'}</span></div>
+                                                    <div><span className="font-semibold text-gray-700">Age:</span> <span className="text-gray-900">{liveAuctionPlayer?.age || '-'}</span></div>
                                                 </div>
                                                 {/* Stats Box */}
                                                 <div className="bottom-0 left-0 w-full bg-yellow-200/80 py-2 sm:py-3 flex justify-around items-center border-t-2 border-yellow-400">
                                                     <div className="text-center">
-                                                        <div className="text-sm sm:text-base md:text-lg font-bold text-yellow-900">{getLiveAuctionPlayer(liveAuction)?.battingStyle || '-'}</div>
+                                                        <div className="text-sm sm:text-base md:text-lg font-bold text-yellow-900">{liveAuctionPlayer?.battingStyle || '-'}</div>
                                                         <div className="text-xs text-yellow-800">BATTING STYLE</div>
                                                     </div>
                                                     <div className="text-center">
-                                                        <div className="text-sm sm:text-base md:text-lg font-bold text-yellow-900">{getLiveAuctionPlayer(liveAuction)?.bowlingStyle || '-'}</div>
+                                                        <div className="text-sm sm:text-base md:text-lg font-bold text-yellow-900">{liveAuctionPlayer?.bowlingStyle || '-'}</div>
                                                         <div className="text-xs text-yellow-800">BOWLING STYLE</div>
                                                     </div>
                                                 </div>
@@ -346,16 +407,12 @@ const TournamentPage: React.FC = () => {
                                                 return (
                                                     <tr key={player.id || (player as any)._id} className="border-b border-yellow-400/20 hover:bg-yellow-400/10 transition">
                                                         <td className="p-2 sm:p-3 md:p-4">
-                                                            {player.photo ? (
-                                                                <img src={player.photo} alt={player.name} className="w-8 sm:w-10 h-8 sm:h-10 rounded-full object-cover" />
-                                                            ) : (
-                                                                <span className="w-8 sm:w-10 h-8 sm:h-10 rounded-full bg-yellow-400 flex items-center justify-center text-[#232946] font-bold text-sm sm:text-lg">
-                                                                    {player.name[0]}
-                                                                </span>
-                                                            )}
+                                                            <span className="w-8 sm:w-10 h-8 sm:h-10 rounded-full bg-yellow-400 flex items-center justify-center text-[#232946] font-bold text-sm sm:text-lg">
+                                                                {player.name[0]}
+                                                            </span>
                                                         </td>
                                                         <td className="p-2 sm:p-3 md:p-4 font-medium text-sm sm:text-base">{player.name}</td>
-                                                        <td className="p-2 sm:p-3 md:p-4 text-sm sm:text-base">₹{player.price ?? '-'}</td>
+                                                        <td className="p-2 sm:p-3 md:p-4 text-sm sm:text-base">₹{player.price !== undefined && player.price !== null ? `₹${player.price}` : '₹-'}</td>
                                                         <td className="p-2 sm:p-3 md:p-4 text-sm sm:text-base">{team?.name || '-'}</td>
                                                     </tr>
                                                 );
@@ -382,13 +439,9 @@ const TournamentPage: React.FC = () => {
                                             {players.filter(p => (p.status === 'available' || !p.status) && p.tournamentId === id).map(player => (
                                                 <tr key={player.id || (player as any)._id} className="border-b border-yellow-400/20 hover:bg-yellow-400/10 transition">
                                                     <td className="p-2 sm:p-3 md:p-4">
-                                                        {player.photo ? (
-                                                            <img src={player.photo} alt={player.name} className="w-8 sm:w-10 h-8 sm:h-10 rounded-full object-cover" />
-                                                        ) : (
-                                                            <span className="w-8 sm:w-10 h-8 sm:h-10 rounded-full bg-yellow-400 flex items-center justify-center text-[#232946] font-bold text-sm sm:text-lg">
-                                                                {player.name[0]}
-                                                            </span>
-                                                        )}
+                                                        <span className="w-8 sm:w-10 h-8 sm:h-10 rounded-full bg-yellow-400 flex items-center justify-center text-[#232946] font-bold text-sm sm:text-lg">
+                                                            {player.name[0]}
+                                                        </span>
                                                     </td>
                                                     <td className="p-2 sm:p-3 md:p-4 font-medium text-sm sm:text-base">{player.name}</td>
                                                     <td className="p-2 sm:p-3 md:p-4 text-sm sm:text-base">₹{player.basePrice ?? '-'}</td>
@@ -417,13 +470,9 @@ const TournamentPage: React.FC = () => {
                                             {players.filter(p => p.status === 'unsold' && p.tournamentId === id).map(player => (
                                                 <tr key={player.id || (player as any)._id} className="border-b border-yellow-400/20 hover:bg-yellow-400/10 transition">
                                                     <td className="p-2 sm:p-3 md:p-4">
-                                                        {player.photo ? (
-                                                            <img src={player.photo} alt={player.name} className="w-8 sm:w-10 h-8 sm:h-10 rounded-full object-cover" />
-                                                        ) : (
-                                                            <span className="w-8 sm:w-10 h-8 sm:h-10 rounded-full bg-yellow-400 flex items-center justify-center text-[#232946] font-bold text-sm sm:text-lg">
-                                                                {player.name[0]}
-                                                            </span>
-                                                        )}
+                                                        <span className="w-8 sm:w-10 h-8 sm:h-10 rounded-full bg-yellow-400 flex items-center justify-center text-[#232946] font-bold text-sm sm:text-lg">
+                                                            {player.name[0]}
+                                                        </span>
                                                     </td>
                                                     <td className="p-2 sm:p-3 md:p-4 font-medium text-sm sm:text-base">{player.name}</td>
                                                     <td className="p-2 sm:p-3 md:p-4 text-sm sm:text-base">₹{player.basePrice ?? '-'}</td>
