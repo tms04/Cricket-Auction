@@ -240,6 +240,15 @@ exports.deleteAuction = async (req, res) => {
     }
 };
 
+exports.deleteAllAuctions = async (req, res) => {
+    try {
+        await require('../models/auction').deleteMany({});
+        res.json({ message: 'All auctions deleted' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+};
+
 exports.resetAuctions = async (req, res) => {
     try {
         const { tournamentId } = req.params;

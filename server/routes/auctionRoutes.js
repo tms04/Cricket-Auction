@@ -13,6 +13,7 @@ router.post('/bid', (req, res, next) => {
     next();
 }, authMiddleware, roleMiddleware(['auctioneer', 'master']), auctionController.placeBid);
 router.post('/complete', authMiddleware, roleMiddleware('auctioneer'), auctionController.completeAuction);
+router.delete('/all', authMiddleware, roleMiddleware(['auctioneer', 'master']), auctionController.deleteAllAuctions);
 router.put('/:id', authMiddleware, roleMiddleware('auctioneer'), auctionController.updateAuction);
 router.delete('/:id', authMiddleware, roleMiddleware('auctioneer'), auctionController.deleteAuction);
 router.post('/reset/:tournamentId', authMiddleware, roleMiddleware(['auctioneer', 'master']), auctionController.resetAuctions);

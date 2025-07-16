@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Gavel, User, DollarSign, Trophy, Shuffle, CheckCircle, XCircle, AlertCircle, Clock, Eye, MapPin, Camera, Target } from 'lucide-react';
+import { Gavel, User, DollarSign, Trophy, Shuffle, CheckCircle, XCircle, AlertCircle, Clock, Eye, MapPin, Camera, Target, Trash2 } from 'lucide-react';
 import { useApp } from '../../contexts/AppContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { Player } from '../../types';
@@ -244,6 +244,17 @@ const AuctionInterface: React.FC = () => {
     }
   };
 
+  const handleDeleteAllAuctions = async () => {
+    if (!window.confirm('Are you sure you want to delete ALL auctions? This cannot be undone.')) return;
+    try {
+      await api.deleteAllAuctions();
+      showNotification('success', 'All auctions deleted!');
+      // Optionally refresh auction state here
+    } catch (err: any) {
+      showNotification('error', err.message || 'Failed to delete all auctions');
+    }
+  };
+
   const formatCurrency = (amount: number) => {
     if (amount === 0) return '₹0';
     if (amount >= 10000000) {
@@ -417,6 +428,13 @@ const AuctionInterface: React.FC = () => {
             >
               <Trophy className="w-4 h-4" />
               <span>Reset Auction</span>
+            </button>
+            <button
+              onClick={handleDeleteAllAuctions}
+              className="flex items-center space-x-2 bg-red-700 text-white px-4 py-2 rounded-lg hover:bg-red-800 transition-colors"
+            >
+              <Trash2 className="w-4 h-4" />
+              <span>Delete All Auctions</span>
             </button>
           </div>
         )}

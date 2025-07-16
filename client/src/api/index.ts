@@ -184,4 +184,9 @@ export async function fetchTeams(page = 1, limit = 20, tournamentId?: string) {
     }
     const res = await axios.get(url);
     return res.data; // { teams, total }
-} 
+}
+
+export const deleteAllAuctions = async () => {
+    const res = await axios.delete(`${API_BASE}/auctions/all`, { headers: authHeader() });
+    return res.data;
+}; 
