@@ -310,6 +310,51 @@ const AuctionInterface: React.FC = () => {
     }
   };
 
+  // New state for teams and sold players
+  const [teamList, setTeamList] = useState<any[]>([]);
+  const [soldPlayersByTeam, setSoldPlayersByTeam] = useState<{ [teamId: string]: any[] }>({});
+  const [loadingTeams, setLoadingTeams] = useState(false);
+
+  // Fetch teams and sold players for the current tournament
+  const fetchTeamsAndSoldPlayers = async () => {
+    if (!myTournament) return;
+    setLoadingTeams(true);
+    try {
+      // Fetch all teams for the tournament
+      const teamRes = await api.fetchTeams(1, 100, myTournament.id);
+      const teams = teamRes.teams || [];
+      setTeamList(teams);
+      // Fetch all sold players for the tournament
+      const playerRes = await api.fetchPlayers(1, 500, myTournament.id);
+      const soldPlayers = (playerRes.players || []).filter((p: any) => p.status === 'sold' && p.team);
+      // Group by team
+      const byTeam: { [teamId: string]: any[] } = {};
+      soldPlayers.forEach((p: any) => {
+        const tid = typeof p.team === 'object' ? p.team._id || p.team.id : p.team;
+        if (!byTeam[tid]) byTeam[tid] = [];
+        byTeam[tid].push(p);
+      });
+      setSoldPlayersByTeam(byTeam);
+    } catch (err) {
+      showNotification('error', 'Failed to fetch teams or players');
+    } finally {
+      setLoadingTeams(false);
+    }
+  };
+
+  // Add a refresh button for teams/players
+  // Optionally, fetch on mount
+  useEffect(() => {
+    fetchTeamsAndSoldPlayers();
+    // eslint-disable-next-line
+  }, [myTournament]);
+
+  // Mark player as unsold and refresh
+  const handleMarkUnsoldAndRefresh = async (playerId: string) => {
+    await handleMarkUnsold(playerId);
+    fetchTeamsAndSoldPlayers();
+  };
+
   if (!myTournament) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -607,77 +652,84 @@ const AuctionInterface: React.FC = () => {
       </div>
 
       {/* Team Budgets */}
-      {tournamentTeams.length > 0 && (
+      {myTournament && teamList.length > 0 && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Team Budgets</h3>
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-lg font-semibold text-gray-900">Team Budgets</h3>
+            <button
+              onClick={fetchTeamsAndSoldPlayers}
+              className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 text-sm"
+              disabled={loadingTeams}
+            >
+              {loadingTeams ? 'Refreshing...' : 'Refresh'}
+            </button>
+          </div>
           <div className="space-y-4">
-            {tournamentTeams.map(team => (
-              <div key={team.id} className="mb-4 bg-white rounded-lg shadow-sm border-2 p-4 transition-all duration-200 hover:shadow-md"
-                style={{ borderColor: team.color + '30' }}>
-                <div className="flex justify-between items-center cursor-pointer" onClick={() => setExpandedTeamId(expandedTeamId === team.id ? null : team.id)}>
+            {teamList.map(team => (
+              <div key={team.id || team._id} className="mb-4 bg-white rounded-lg shadow-sm border-2 p-4 transition-all duration-200 hover:shadow-md"
+                style={{ borderColor: (team.color || '#888') + '30' }}>
+                <div className="flex justify-between items-center cursor-pointer">
                   <div className="flex items-center">
                     <div className="w-10 h-10 rounded-lg flex items-center justify-center overflow-hidden mr-3 shadow-sm"
-                      style={{ backgroundColor: team.color + '20', border: `2px solid ${team.color + '40'}` }}>
+                      style={{ backgroundColor: (team.color || '#888') + '20', border: `2px solid ${(team.color || '#888') + '40'}` }}>
                       {team.logo ? (
                         <img src={team.logo} alt={team.name} className="w-full h-full object-cover" />
                       ) : (
-                        <User className="w-5 h-5" style={{ color: team.color }} />
+                        <User className="w-5 h-5" style={{ color: team.color || '#888' }} />
                       )}
                     </div>
                     <div>
-                      <div className="font-semibold text-lg" style={{ color: team.color }}>{team.name}</div>
+                      <div className="font-semibold text-lg" style={{ color: team.color || '#888' }}>{team.name}</div>
                       <div className="text-sm text-gray-600">{team.owner}</div>
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className="font-bold text-lg" style={{ color: team.color }}>{formatCurrency(team.remainingBudget)}</div>
+                    <div className="font-bold text-lg" style={{ color: team.color || '#888' }}>{formatCurrency(team.remainingBudget)}</div>
                     <div className="text-xs text-gray-500">{((1 - team.remainingBudget / team.budget) * 100).toFixed(1)}% used</div>
                     <div className="w-24 h-2 bg-gray-200 rounded-full mt-1">
                       <div
                         className="h-2 rounded-full transition-all duration-300"
                         style={{
                           width: `${((1 - team.remainingBudget / team.budget) * 100)}%`,
-                          backgroundColor: team.color
+                          backgroundColor: team.color || '#888'
                         }}
                       />
                     </div>
                   </div>
                 </div>
-                {expandedTeamId === team.id && (
-                  <div className="mt-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                    {players.filter(p => p.team === team.id).map(player => (
-                      <div key={player.id} className="bg-gray-50 rounded-lg p-3 flex items-center justify-between border-l-4 transition-all duration-200 hover:shadow-sm"
-                        style={{ borderLeftColor: team.color }}>
-                        <div className="flex items-center space-x-3">
-                          <div className="w-8 h-8 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-full flex items-center justify-center overflow-hidden">
-                            <span className="w-4 h-4 text-white font-bold text-lg">{player.name[0]}</span>
-                          </div>
-                          <div>
-                            <div className="font-medium text-gray-900">{player.name}</div>
-                            <div className="text-xs font-semibold" style={{ color: team.color }}>
-                              Price: {formatCurrency(player.price || 0)}
-                            </div>
+                <div className="mt-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {(soldPlayersByTeam[team.id || team._id] || []).map(player => (
+                    <div key={player.id} className="bg-gray-50 rounded-lg p-3 flex items-center justify-between border-l-4 transition-all duration-200 hover:shadow-sm"
+                      style={{ borderLeftColor: team.color || '#888' }}>
+                      <div className="flex items-center space-x-3">
+                        <div className="w-8 h-8 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-full flex items-center justify-center overflow-hidden">
+                          <span className="w-4 h-4 text-white font-bold text-lg">{player.name[0]}</span>
+                        </div>
+                        <div>
+                          <div className="font-medium text-gray-900">{player.name}</div>
+                          <div className="text-xs font-semibold" style={{ color: team.color || '#888' }}>
+                            Price: {formatCurrency(player.price || 0)}
                           </div>
                         </div>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleMarkUnsold(player.id);
-                          }}
-                          className="ml-4 px-3 py-1 bg-red-500 text-white rounded hover:bg-red-600 text-xs transition-colors"
-                        >
-                          Mark Unsold
-                        </button>
                       </div>
-                    ))}
-                    {players.filter(p => p.team === team.id).length === 0 && (
-                      <div className="text-gray-500 text-sm col-span-full text-center py-4">
-                        <User className="w-8 h-8 mx-auto mb-2 text-gray-300" />
-                        No players in this team yet.
-                      </div>
-                    )}
-                  </div>
-                )}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleMarkUnsoldAndRefresh(player.id || player._id);
+                        }}
+                        className="ml-4 px-3 py-1 bg-red-500 text-white rounded hover:bg-red-600 text-xs transition-colors"
+                      >
+                        Mark Unsold
+                      </button>
+                    </div>
+                  ))}
+                  {(soldPlayersByTeam[team.id || team._id] || []).length === 0 && (
+                    <div className="text-gray-500 text-sm col-span-full text-center py-4">
+                      <User className="w-8 h-8 mx-auto mb-2 text-gray-300" />
+                      No players in this team yet.
+                    </div>
+                  )}
+                </div>
               </div>
             ))}
           </div>

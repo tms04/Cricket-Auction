@@ -5,10 +5,14 @@ import { useAuth } from '../../contexts/AuthContext';
 import { Player } from '../../types';
 import * as XLSX from 'xlsx';
 import { fetchPlayers } from '../../api';
+import AuctioneerPlayerManager from './AuctioneerPlayerManager';
 
 const PlayerManager: React.FC = () => {
-  const { players: contextPlayers, addPlayer, updatePlayer, deletePlayer, myTournament, tournaments } = useApp();
   const { user } = useAuth();
+  if (user && user.role === 'auctioneer') {
+    return <AuctioneerPlayerManager />;
+  }
+  const { players: contextPlayers, addPlayer, updatePlayer, deletePlayer, myTournament, tournaments } = useApp();
   const [players, setPlayers] = useState<Player[]>(contextPlayers || []);
   const [showForm, setShowForm] = useState(false);
   const [editingPlayer, setEditingPlayer] = useState<Player | null>(null);

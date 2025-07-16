@@ -9,6 +9,7 @@ async function getAuctioneerTournament(email) {
 }
 
 exports.getAllPlayers = async (req, res) => {
+    res.set('Cache-Control', 'no-store');
     try {
         const page = parseInt(req.query.page) || 1;
         const limit = req.query.limit ? parseInt(req.query.limit) : 0; // 0 means no limit
@@ -55,6 +56,7 @@ exports.getAllPlayers = async (req, res) => {
 };
 
 exports.getPlayer = async (req, res) => {
+    res.set('Cache-Control', 'no-store');
     try {
         const player = await Player.findById(req.params.id);
         if (!player) return res.status(404).json({ error: 'Player not found' });

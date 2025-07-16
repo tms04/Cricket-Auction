@@ -168,17 +168,17 @@ export const fetchPlayerSummaries = async (tournamentId?: string) => {
 };
 
 // Only keep the paginated versions:
-export async function fetchPlayers(page = 1, limit = 50, tournamentId?: string) {
-    let url = `/api/players?page=${page}&limit=${limit}`;
+export async function fetchPlayers(page = 1, limit = 200, tournamentId?: string) {
+    let url = `${API_BASE}/players`;
     if (tournamentId) {
-        url += `&tournamentId=${tournamentId}`;
+        url += `?tournamentId=${tournamentId}`;
     }
     const res = await axios.get(url);
     return res.data; // { players, total }
 }
 
 export async function fetchTeams(page = 1, limit = 20, tournamentId?: string) {
-    let url = `/api/teams?page=${page}&limit=${limit}`;
+    let url = `${API_BASE}/teams?page=${page}&limit=${limit}`;
     if (tournamentId) {
         url += `&tournamentId=${tournamentId}`;
     }
