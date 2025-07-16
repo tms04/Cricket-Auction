@@ -1,11 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Plus, Users, DollarSign, Edit2, Trash2, User, CheckCircle, XCircle } from 'lucide-react';
 import { useApp } from '../../contexts/AppContext';
 import { Team } from '../../types';
 import { useAuth } from '../../contexts/AuthContext';
+import { fetchTeams } from '../../api';
 
 const TeamManager: React.FC = () => {
-  const { teams, addTeam, updateTeam, deleteTeam, players, myTournament, tournaments } = useApp();
+  const { teams: contextTeams, addTeam, updateTeam, deleteTeam, players, myTournament, tournaments } = useApp();
   const { user } = useAuth();
   const [showForm, setShowForm] = useState(false);
   const [editingTeam, setEditingTeam] = useState<Team | null>(null);
@@ -16,6 +17,18 @@ const TeamManager: React.FC = () => {
     color: '#10B981',
     logo: ''
   });
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [teams, setTeams] = useState<Team[]>([]);
+
+  useEffect(() => {
+    const fetchPaginatedTeams = async () => {
+      const data = await fetchTeams(page, 20);
+      setTeams(data.teams);
+      setTotal(data.total);
+    };
+    fetchPaginatedTeams();
+  }, [page]);
 
   const teamColors = [
     '#10B981', '#3B82F6', '#EF4444', '#F59E0B', '#8B5CF6',
@@ -40,9 +53,12 @@ const TeamManager: React.FC = () => {
   const tournamentName = isAuctioneer && myTournament ? myTournament.name : undefined;
   const tournamentBudget = isAuctioneer && myTournament ? myTournament.budget : undefined;
 
+  // Ensure teams is always an array
+  const safeTeams = Array.isArray(teams) ? teams : [];
+
   const filteredTeams = isAuctioneer && myTournament
-    ? teams.filter(team => team.tournamentId === myTournament.id)
-    : teams;
+    ? safeTeams.filter(team => team.tournamentId === myTournament.id)
+    : safeTeams;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

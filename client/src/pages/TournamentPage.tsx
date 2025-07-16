@@ -5,9 +5,17 @@ import { Gavel, Menu, X } from 'lucide-react'; // Added Menu and X icons for mob
 import Confetti from 'react-confetti';
 import * as api from '../api';
 
+interface TournamentMinimal {
+    id: string;
+    name: string;
+    status: string;
+    logo?: string;
+}
+
 const TournamentPage: React.FC = () => {
     const { id } = useParams<{ id: string }>();
-    const { tournaments, teams, players, fetchTeams, fetchPlayers } = useApp();
+    const [tournament, setTournament] = useState<TournamentMinimal | null>(null);
+    const [loading, setLoading] = useState(true);
     const [tab, setTab] = useState<'live' | 'sold' | 'available' | 'unsold' | 'teams'>('live');
     const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
     const [showSoldAnimation, setShowSoldAnimation] = useState(false);
@@ -15,17 +23,46 @@ const TournamentPage: React.FC = () => {
     const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
     const soldTimeoutRef = useRef<number | null>(null);
     const prevLiveAuctionRef = useRef<any | null>(null);
-    const tournament = tournaments.find(t => t.id === id);
-    if (!tournament) return <div className="p-6">Tournament not found.</div>;
-
-    // REST polling for current auction and live bid updates
     const [liveAuction, setLiveAuction] = useState<any>(null);
     const [prevAuction, setPrevAuction] = useState<any>(null);
     const [hadBid, setHadBid] = useState(false);
+    const [liveAuctionPlayer, setLiveAuctionPlayer] = useState<any>(null);
+    const [currentBidderTeam, setCurrentBidderTeam] = useState<string | null>(null);
+    const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+
+    // --- State for player tabs ---
+    const [tabPlayers, setTabPlayers] = useState<any[]>([]);
+    const [tabPlayersLoading, setTabPlayersLoading] = useState(false);
+    const [teams, setTeams] = useState<any[]>([]);
+    const [teamsLoading, setTeamsLoading] = useState(false);
+    const [expandedTeamId, setExpandedTeamId] = useState<string | null>(null);
+    const [teamPlayers, setTeamPlayers] = useState<{ [teamId: string]: any[] }>({});
+    const [teamPlayersLoading, setTeamPlayersLoading] = useState<{ [teamId: string]: boolean }>({});
+
+    useEffect(() => {
+        if (!id) return;
+        setLoading(true);
+        fetch(`${API_BASE}/api/tournaments/${id}`)
+            .then(res => res.ok ? res.json() : null)
+            .then(data => {
+                if (data) {
+                    setTournament({
+                        id: data._id || data.id,
+                        name: data.name,
+                        status: data.status,
+                        logo: data.logo || data.photo || undefined,
+                    });
+                } else {
+                    setTournament(null);
+                }
+            })
+            .catch(() => setTournament(null))
+            .finally(() => setLoading(false));
+    }, [id, API_BASE]);
+
     useEffect(() => {
         console.log('[Polling Effect] Running. tab:', tab);
         let interval: any;
-        const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000';
         const fetchCurrentAuction = async () => {
             console.log('[Polling] fetchCurrentAuction called');
             try {
@@ -60,14 +97,7 @@ const TournamentPage: React.FC = () => {
             setLiveAuction(null);
         }
         return () => interval && clearInterval(interval);
-    }, [tab, id, prevAuction, hadBid]);
-
-    // Since we now use polling for liveAuction, set auctionHistory to an empty array or fetch from backend if needed
-    const auctionHistory: any[] = [];
-    const tournamentTeams = teams.filter(t => t.tournamentId === id);
-    const getPlayer = (playerId: string) => players.find(p => p.id === playerId);
-    const getTeam = (teamId: string) => teams.find(t => t.id === teamId);
-    const [liveAuctionPlayer, setLiveAuctionPlayer] = useState<any>(null);
+    }, [tab, id, prevAuction, hadBid, API_BASE]);
 
     useEffect(() => {
         setLastUpdated(new Date());
@@ -75,7 +105,13 @@ const TournamentPage: React.FC = () => {
 
     useEffect(() => {
         let playerId = liveAuction?.playerId || liveAuction?.player;
-        if (typeof playerId === 'string' && playerId) {
+        console.log('Raw playerId:', playerId, typeof playerId, playerId && typeof playerId === 'object' ? Object.keys(playerId) : '');
+        if (playerId && typeof playerId === 'object') {
+            console.log('playerId object keys/values:', playerId, Object.entries(playerId));
+            playerId = playerId._id || playerId.id || Object.values(playerId).find(v => typeof v === 'string') || '';
+        }
+        console.log('Extracted playerId:', playerId);
+        if (typeof playerId === 'string' && playerId && playerId !== '[object Object]') {
             api.fetchPlayerById(playerId).then(player => {
                 setLiveAuctionPlayer(player);
             }).catch(err => {
@@ -86,7 +122,6 @@ const TournamentPage: React.FC = () => {
         }
     }, [liveAuction]);
 
-    // Detect when liveAuction transitions from active to undefined (sold or unsold)
     useEffect(() => {
         const prev = prevLiveAuctionRef.current;
         if (prev && prev.status === 'active' && !liveAuction) {
@@ -110,19 +145,78 @@ const TournamentPage: React.FC = () => {
     }, [liveAuction]);
 
     useEffect(() => {
+        if (liveAuction?.currentBidder) {
+            fetch(`${API_BASE}/api/teams/${liveAuction.currentBidder}`)
+                .then(res => res.json())
+                .then(team => setCurrentBidderTeam(team.name))
+                .catch(() => setCurrentBidderTeam(null));
+        } else {
+            setCurrentBidderTeam(null);
+        }
+    }, [liveAuction?.currentBidder, API_BASE]);
+
+    useEffect(() => {
         return () => {
             if (soldTimeoutRef.current) clearTimeout(soldTimeoutRef.current);
         };
     }, []);
 
+    // --- Fetch players for Available/Sold/Unsold tabs ---
+    useEffect(() => {
+        if (tab === 'available' || tab === 'sold' || tab === 'unsold') {
+            setTabPlayersLoading(true);
+            let status = tab;
+            // API expects 'available', 'sold', 'unsold'
+            fetch(`${API_BASE}/api/players?status=${status}&tournamentId=${tournament?.id}`)
+                .then(res => res.json())
+                .then(playersObj => setTabPlayers(Array.isArray(playersObj.players) ? playersObj.players : []))
+                .catch(() => setTabPlayers([]))
+                .finally(() => setTabPlayersLoading(false));
+        }
+    }, [tab, tournament?.id, API_BASE]);
+
+    // --- Fetch teams for Teams & Players tab ---
+    useEffect(() => {
+        if (tab === 'teams') {
+            setTeamsLoading(true);
+            fetch(`${API_BASE}/api/teams?tournamentId=${tournament?.id}`)
+                .then(res => res.json())
+                .then(data => setTeams(data.teams || []))
+                .catch(() => setTeams([]))
+                .finally(() => setTeamsLoading(false));
+        }
+    }, [tab, tournament?.id, API_BASE]);
+
+    // --- Fetch players for a team when a team card is expanded ---
+    const handleExpandTeam = (teamId: string) => {
+        console.log('handleExpandTeam called for teamId:', teamId, 'expandedTeamId:', expandedTeamId, 'teamPlayers:', teamPlayers[teamId]);
+        setExpandedTeamId(expandedTeamId === teamId ? null : teamId);
+        if (!teamPlayers[teamId]) {
+            setTeamPlayersLoading(prev => ({ ...prev, [teamId]: true }));
+            console.log('About to fetch players for teamId:', teamId);
+            console.log('Fetching players for teamId:', teamId);
+            fetch(`${API_BASE}/api/players?team=${teamId}`)
+                .then(res => res.json())
+                .then(playersObj => {
+                    console.log('API response for team', teamId, ':', playersObj);
+                    setTeamPlayers(prev => ({
+                        ...prev,
+                        [teamId]: Array.isArray(playersObj.players) ? playersObj.players : []
+                    }));
+                })
+                .catch(() => setTeamPlayers(prev => ({ ...prev, [teamId]: [] })))
+                .finally(() => setTeamPlayersLoading(prev => ({ ...prev, [teamId]: false })));
+        }
+    };
+
     // Helper to get the player for the live auction (handles both playerId and player object)
     const getLiveAuctionPlayer = (auction: any) => {
         if (!auction) return null;
         if (auction.playerId) {
-            return players.find(p => p.id === auction.playerId);
+            return null; // No players state, so cannot find player by ID directly
         } else if (auction.player && auction.player._id) {
             // Try to find in players, fallback to embedded object
-            return players.find(p => p.id === auction.player._id) || auction.player;
+            return null; // No players state, so cannot find player by ID directly
         }
         return null;
     };
@@ -145,13 +239,13 @@ const TournamentPage: React.FC = () => {
         return 'from-gray-100 via-gray-50 to-gray-200 border-gray-200';
     };
 
-    // Fetch latest players and teams when switching to relevant tabs
-    useEffect(() => {
-        if (tab === 'sold' || tab === 'available' || tab === 'unsold' || tab === 'teams') {
-            if (fetchPlayers) fetchPlayers();
-            if (fetchTeams) fetchTeams();
-        }
-    }, [tab, fetchPlayers, fetchTeams]);
+    // Remove useEffect that references fetchPlayers and fetchTeams
+    // useEffect(() => {
+    //     if (tab === 'sold') {
+    //         if (fetchPlayers) fetchPlayers();
+    //         if (fetchTeams) fetchTeams();
+    //     }
+    // }, [tab, fetchPlayers, fetchTeams]);
 
     // Close mobile nav when tab changes
     useEffect(() => {
@@ -159,7 +253,19 @@ const TournamentPage: React.FC = () => {
     }, [tab]);
 
     // Debug: Log players before rendering Sold Players
-    console.log('Sold Players:', players.filter(p => p.status === 'sold'));
+    // console.log('Sold Players:', players.filter(p => p.status === 'sold'));
+
+    if (loading) {
+        return (
+            <div className="min-h-screen flex items-center justify-center">
+                <div className="text-center">
+                    <div className="w-8 h-8 border-4 border-yellow-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                    <p className="text-gray-600">Loading tournament...</p>
+                </div>
+            </div>
+        );
+    }
+    if (!tournament) return <div className="p-6">Tournament not found.</div>;
 
     return (
         <div className="min-h-screen w-full flex flex-col items-center justify-start relative overflow-x-hidden bg-gradient-to-br from-[#0a1026] via-[#1a223f] to-[#232946]">
@@ -294,9 +400,6 @@ const TournamentPage: React.FC = () => {
                                                 <div className="flex justify-between items-center px-4 sm:px-6 pt-4 sm:pt-6">
                                                     <span className="bg-white/80 rounded-full px-2 sm:px-3 py-1 text-xs font-bold text-yellow-800 shadow">{liveAuctionPlayer?.primaryRole || '-'}</span>
                                                     <div className="flex items-center gap-2">
-                                                        {getTeam(getLiveAuctionBidder(liveAuction))?.logo && (
-                                                            <img src={getTeam(getLiveAuctionBidder(liveAuction))?.logo} alt="team" className="w-6 sm:w-8 h-6 sm:h-8 rounded-full border-2 border-white shadow" />
-                                                        )}
                                                     </div>
                                                 </div>
                                                 {/* Player Photo */}
@@ -319,7 +422,7 @@ const TournamentPage: React.FC = () => {
                                                     <h2 className="text-xl sm:text-2xl font-extrabold text-gray-900">{liveAuctionPlayer ? liveAuctionPlayer.name : '-'}</h2>
                                                     <div className="text-base sm:text-lg font-bold text-yellow-900 mt-1">
                                                         <div><span className="font-bold">Current Bid:</span> <span className="text-gray-900">₹{liveAuctionPlayer ? getLiveAuctionBid(liveAuction) : '-'}</span></div>
-                                                        <div><span className="font-bold">Current Bidder:</span> <span className={`text-gray-900 font-bold ${getTeam(getLiveAuctionBidder(liveAuction)) ? 'border-2 border-yellow-400 rounded px-1 sm:px-2 py-0 sm:py-1 shadow animate-pulse-fast' : ''}`}>{liveAuctionPlayer ? getTeam(getLiveAuctionBidder(liveAuction))?.name : '-'}</span></div>
+                                                        <div><span className="font-bold">Current Bidder:</span> <span className="text-gray-900 font-bold">{currentBidderTeam ? currentBidderTeam : "-"}</span></div>
                                                     </div>
                                                 </div>
                                                 {/* Info Grid */}
@@ -388,149 +491,266 @@ const TournamentPage: React.FC = () => {
                                 )}
                             </div>
                         )}
-                        {tab === 'sold' && (
-                            <div className="bg-white/10 backdrop-blur-lg rounded-xl sm:rounded-2xl border-2 border-yellow-400/40 shadow-lg p-4 sm:p-6 md:p-8">
-                                <h3 className="font-semibold text-xl sm:text-2xl mb-3 sm:mb-4 text-yellow-200">Sold Players</h3>
-                                <div className="overflow-x-auto">
-                                    <table className="w-full text-left rounded-xl overflow-hidden min-w-[600px]">
-                                        <thead>
-                                            <tr className="bg-gradient-to-r from-yellow-400/80 to-orange-400/80 text-[#232946]">
-                                                <th className="p-2 sm:p-3 md:p-4 font-bold text-sm sm:text-base md:text-lg">Photo</th>
-                                                <th className="p-2 sm:p-3 md:p-4 font-bold text-sm sm:text-base md:text-lg">Player</th>
-                                                <th className="p-2 sm:p-3 md:p-4 font-bold text-sm sm:text-base md:text-lg">Price</th>
-                                                <th className="p-2 sm:p-3 md:p-4 font-bold text-sm sm:text-base md:text-lg">Team</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="bg-white/10 text-yellow-100">
-                                            {players.filter(p => p.status === 'sold' && p.tournamentId === id).map(player => {
-                                                const team = teams.find(t => t.id === player.team);
-                                                return (
-                                                    <tr key={player.id || (player as any)._id} className="border-b border-yellow-400/20 hover:bg-yellow-400/10 transition">
-                                                        <td className="p-2 sm:p-3 md:p-4">
-                                                            <span className="w-8 sm:w-10 h-8 sm:h-10 rounded-full bg-yellow-400 flex items-center justify-center text-[#232946] font-bold text-sm sm:text-lg">
-                                                                {player.name[0]}
-                                                            </span>
-                                                        </td>
-                                                        <td className="p-2 sm:p-3 md:p-4 font-medium text-sm sm:text-base">{player.name}</td>
-                                                        <td className="p-2 sm:p-3 md:p-4 text-sm sm:text-base">₹{player.price !== undefined && player.price !== null ? `₹${player.price}` : '₹-'}</td>
-                                                        <td className="p-2 sm:p-3 md:p-4 text-sm sm:text-base">{team?.name || '-'}</td>
-                                                    </tr>
-                                                );
-                                            })}
-                                        </tbody>
-                                    </table>
+                        {tab === 'available' && (
+                            <div className="relative">
+                                <div className="text-xs text-gray-500 mb-4 flex justify-between items-center">
+                                    <span>Last updated: {lastUpdated ? lastUpdated.toLocaleTimeString() : '-'}</span>
+                                    <span className="bg-yellow-100 text-yellow-800 text-xs px-2 py-1 rounded-full">
+                                        {tabPlayers.length} players available
+                                    </span>
                                 </div>
+
+                                {tabPlayersLoading ? (
+                                    <div className="flex flex-col items-center justify-center py-12 space-y-4">
+                                        <div className="w-10 h-10 border-4 border-yellow-400 border-t-transparent rounded-full animate-spin"></div>
+                                        <p className="text-gray-500">Loading available players...</p>
+                                    </div>
+                                ) : (
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                                        {tabPlayers.map(player => (
+                                            <div
+                                                key={player._id}
+                                                className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-300 group"
+                                            >
+                                                <div className="bg-gradient-to-r from-yellow-50 to-yellow-100 p-5 text-center">
+                                                    <h3 className="font-bold text-xl text-gray-800 mb-1 group-hover:text-yellow-600 transition-colors">
+                                                        {player.name}
+                                                    </h3>
+                                                    <div className="w-16 h-1 bg-yellow-300 mx-auto mb-3 rounded-full"></div>
+
+                                                    <div className="flex justify-between items-center bg-white rounded-lg p-3 shadow-inner">
+                                                        <div className="text-left">
+                                                            <p className="text-xs text-gray-500 font-medium">Base Price</p>
+                                                            <p className="text-lg font-bold text-gray-800">₹{player.basePrice ?? '-'}</p>
+                                                        </div>
+
+                                                        <div className={`px-3 py-1 rounded-full text-xs font-semibold ${player.status === 'sold'
+                                                            ? 'bg-red-100 text-red-800'
+                                                            : player.status === 'unsold'
+                                                                ? 'bg-gray-100 text-gray-800'
+                                                                : 'bg-green-100 text-green-800'
+                                                            }`}>
+                                                            {player.status}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
                         )}
-                        {tab === 'available' && (
-                            <div className="bg-white/10 backdrop-blur-lg rounded-xl sm:rounded-2xl border-2 border-yellow-400/40 shadow-lg p-4 sm:p-6 md:p-8">
-                                <h3 className="font-semibold text-xl sm:text-2xl mb-3 sm:mb-4 text-yellow-200">Available Players</h3>
-                                <div className="overflow-x-auto">
-                                    <table className="w-full text-left rounded-xl overflow-hidden min-w-[600px]">
-                                        <thead>
-                                            <tr className="bg-gradient-to-r from-yellow-400/80 to-orange-400/80 text-[#232946]">
-                                                <th className="p-2 sm:p-3 md:p-4 font-bold text-sm sm:text-base md:text-lg">Photo</th>
-                                                <th className="p-2 sm:p-3 md:p-4 font-bold text-sm sm:text-base md:text-lg">Player</th>
-                                                <th className="p-2 sm:p-3 md:p-4 font-bold text-sm sm:text-base md:text-lg">Base Price</th>
-                                                <th className="p-2 sm:p-3 md:p-4 font-bold text-sm sm:text-base md:text-lg">Category</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="bg-white/10 text-yellow-100">
-                                            {players.filter(p => (p.status === 'available' || !p.status) && p.tournamentId === id).map(player => (
-                                                <tr key={player.id || (player as any)._id} className="border-b border-yellow-400/20 hover:bg-yellow-400/10 transition">
-                                                    <td className="p-2 sm:p-3 md:p-4">
-                                                        <span className="w-8 sm:w-10 h-8 sm:h-10 rounded-full bg-yellow-400 flex items-center justify-center text-[#232946] font-bold text-sm sm:text-lg">
-                                                            {player.name[0]}
-                                                        </span>
-                                                    </td>
-                                                    <td className="p-2 sm:p-3 md:p-4 font-medium text-sm sm:text-base">{player.name}</td>
-                                                    <td className="p-2 sm:p-3 md:p-4 text-sm sm:text-base">₹{player.basePrice ?? '-'}</td>
-                                                    <td className="p-2 sm:p-3 md:p-4 text-sm sm:text-base">{player.category || '-'}</td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
+                        {tab === 'sold' && (
+                            <div className="relative">
+                                <div className="text-xs text-gray-500 mb-4 flex justify-between items-center">
+                                    <span>Last updated: {lastUpdated ? lastUpdated.toLocaleTimeString() : '-'}</span>
+                                    <span className="bg-red-100 text-red-800 text-xs px-2 py-1 rounded-full">
+                                        {tabPlayers.length} players sold
+                                    </span>
                                 </div>
+
+                                {tabPlayersLoading ? (
+                                    <div className="flex flex-col items-center justify-center py-12 space-y-4">
+                                        <div className="w-10 h-10 border-4 border-red-400 border-t-transparent rounded-full animate-spin"></div>
+                                        <p className="text-gray-500">Loading sold players...</p>
+                                    </div>
+                                ) : (
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                                        {tabPlayers.map(player => (
+                                            <div
+                                                key={player._id}
+                                                className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-300 group"
+                                            >
+                                                <div className="bg-gradient-to-r from-red-50 to-red-100 p-5 text-center relative">
+                                                    {/* Sold badge */}
+                                                    <div className="absolute top-2 right-2 bg-red-600 text-white text-xs font-bold px-2 py-1 rounded-full">
+                                                        SOLD
+                                                    </div>
+
+                                                    <h3 className="font-bold text-xl text-gray-800 m-2 group-hover:text-red-600 transition-colors">
+                                                        {player.name}
+                                                    </h3>
+                                                    <div className="w-16 h-1 bg-red-300 mx-auto mb-3 rounded-full"></div>
+
+                                                    <div className="space-y-3">
+                                                        <div className="flex justify-between items-center bg-white rounded-lg p-3 shadow-inner">
+                                                            <div className="text-left">
+                                                                <p className="text-xs text-gray-500 font-medium">Base Price</p>
+                                                                <p className="text-sm font-semibold text-gray-700">₹{player.basePrice ?? '-'}</p>
+                                                            </div>
+                                                            <div className="text-left">
+                                                                <p className="text-xs text-gray-500 font-medium">Sold For</p>
+                                                                <p className="text-lg font-bold text-red-600">₹{player.price ?? '-'}</p>
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="bg-white rounded-lg p-3 shadow-inner">
+                                                            <p className="text-xs text-gray-500 font-medium">Team</p>
+                                                            <p className="text-sm font-semibold text-gray-800 truncate">{player.teamName ?? '-'}</p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
                         )}
                         {tab === 'unsold' && (
-                            <div className="bg-white/10 backdrop-blur-lg rounded-xl sm:rounded-2xl border-2 border-yellow-400/40 shadow-lg p-4 sm:p-6 md:p-8">
-                                <h3 className="font-semibold text-xl sm:text-2xl mb-3 sm:mb-4 text-yellow-200">Unsold Players</h3>
-                                <div className="overflow-x-auto">
-                                    <table className="w-full text-left rounded-xl overflow-hidden min-w-[600px]">
-                                        <thead>
-                                            <tr className="bg-gradient-to-r from-yellow-400/80 to-orange-400/80 text-[#232946]">
-                                                <th className="p-2 sm:p-3 md:p-4 font-bold text-sm sm:text-base md:text-lg">Photo</th>
-                                                <th className="p-2 sm:p-3 md:p-4 font-bold text-sm sm:text-base md:text-lg">Player</th>
-                                                <th className="p-2 sm:p-3 md:p-4 font-bold text-sm sm:text-base md:text-lg">Base Price</th>
-                                                <th className="p-2 sm:p-3 md:p-4 font-bold text-sm sm:text-base md:text-lg">Category</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="bg-white/10 text-yellow-100">
-                                            {players.filter(p => p.status === 'unsold' && p.tournamentId === id).map(player => (
-                                                <tr key={player.id || (player as any)._id} className="border-b border-yellow-400/20 hover:bg-yellow-400/10 transition">
-                                                    <td className="p-2 sm:p-3 md:p-4">
-                                                        <span className="w-8 sm:w-10 h-8 sm:h-10 rounded-full bg-yellow-400 flex items-center justify-center text-[#232946] font-bold text-sm sm:text-lg">
-                                                            {player.name[0]}
-                                                        </span>
-                                                    </td>
-                                                    <td className="p-2 sm:p-3 md:p-4 font-medium text-sm sm:text-base">{player.name}</td>
-                                                    <td className="p-2 sm:p-3 md:p-4 text-sm sm:text-base">₹{player.basePrice ?? '-'}</td>
-                                                    <td className="p-2 sm:p-3 md:p-4 text-sm sm:text-base">{player.category || '-'}</td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
+                            <div className="relative">
+                                <div className="text-xs text-gray-500 mb-4 flex justify-between items-center">
+                                    <span>Last updated: {lastUpdated ? lastUpdated.toLocaleTimeString() : '-'}</span>
+                                    <span className="bg-gray-200 text-gray-800 text-xs px-2 py-1 rounded-full">
+                                        {tabPlayers.length} players unsold
+                                    </span>
                                 </div>
+
+                                {tabPlayersLoading ? (
+                                    <div className="flex flex-col items-center justify-center py-12 space-y-4">
+                                        <div className="w-10 h-10 border-4 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
+                                        <p className="text-gray-500">Loading unsold players...</p>
+                                    </div>
+                                ) : (
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                                        {tabPlayers.map(player => (
+                                            <div
+                                                key={player._id}
+                                                className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-300 group"
+                                            >
+                                                <div className="bg-gradient-to-r from-gray-50 to-gray-100 p-5 text-center relative">
+                                                    {/* Unsold badge */}
+                                                    <div className="absolute top-2 right-2 bg-gray-600 text-white text-xs font-bold px-2 py-1 rounded-full">
+                                                        UNSOLD
+                                                    </div>
+
+                                                    <h3 className="font-bold text-xl text-gray-700 m-2 group-hover:text-gray-800 transition-colors">
+                                                        {player.name}
+                                                    </h3>
+                                                    <div className="w-16 h-1 bg-gray-300 mx-auto mb-3 rounded-full"></div>
+
+                                                    <div className="bg-white rounded-lg p-4 shadow-inner">
+                                                        <div className="flex flex-col items-center">
+                                                            <p className="text-xs text-gray-500 font-medium mb-1">Base Price</p>
+                                                            <p className="text-lg font-bold text-gray-800">₹{player.basePrice ?? '-'}</p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
                         )}
                         {tab === 'teams' && (
-                            <div className="bg-white/10 backdrop-blur-lg rounded-xl sm:rounded-2xl border-2 border-yellow-400/40 shadow-lg p-4 sm:p-6 md:p-8">
-                                <h3 className="font-semibold text-xl sm:text-2xl mb-3 sm:mb-4 text-yellow-200">Teams & Players</h3>
-                                {tournamentTeams.length === 0 ? (
-                                    <div className="text-gray-500">No teams found for this tournament.</div>
+                            <div className="relative">
+                                <div className="flex justify-between items-center mb-4">
+                                    <div className="text-xs text-gray-400 mb-2">Last updated: {lastUpdated ? lastUpdated.toLocaleTimeString() : '-'}</div>
+                                    <button
+                                        className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 transition"
+                                        onClick={() => {
+                                            setTeamsLoading(true);
+                                            setTeamPlayers({});
+                                            setTeamPlayersLoading({});
+                                            fetch(`${API_BASE}/api/teams?tournamentId=${tournament?.id}`)
+                                                .then(res => res.json())
+                                                .then(data => setTeams(data.teams || []))
+                                                .catch(() => setTeams([]))
+                                                .finally(() => setTeamsLoading(false));
+                                        }}
+                                    >
+                                        Refresh
+                                    </button>
+                                </div>
+                                <div className="text-xs text-gray-500 mb-4 flex justify-between items-center">
+                                    <span>Last updated: {lastUpdated ? lastUpdated.toLocaleTimeString() : '-'}</span>
+                                    <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full">
+                                        {teams.length} teams participating
+                                    </span>
+                                </div>
+
+                                {teamsLoading ? (
+                                    <div className="flex flex-col items-center justify-center py-12 space-y-4">
+                                        <div className="w-10 h-10 border-4 border-blue-400 border-t-transparent rounded-full animate-spin"></div>
+                                        <p className="text-gray-500">Loading teams...</p>
+                                    </div>
                                 ) : (
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 md:gap-8">
-                                        {tournamentTeams.map(team => {
-                                            const teamPlayers = players.filter(p => p.team === team.id);
-                                            return (
-                                                <div key={team.id} className="bg-[#232946]/80 rounded-xl sm:rounded-2xl px-4 sm:px-6 md:px-8 py-4 sm:py-6 border-2 border-yellow-400/40 shadow-lg flex flex-col items-center">
-                                                    <div className="flex flex-col sm:flex-row items-center gap-3 sm:gap-4 mb-3 sm:mb-4 w-full">
-                                                        <div className="w-12 h-12 sm:w-14 sm:h-14 rounded bg-gray-200 flex items-center justify-center" style={{ backgroundColor: team.color }}>
-                                                            {team.logo ? <img src={team.logo} alt="Logo" className="w-full h-full object-cover rounded" /> : <span className="text-white font-bold text-xl sm:text-2xl">{team.name[0]}</span>}
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                        {teams.map(team => (
+                                            <div key={team._id} className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow">
+                                                {/* Team Header */}
+                                                <div className="bg-gradient-to-r from-blue-50 to-blue-100 p-5 flex items-center gap-4">
+                                                    {team.logo && (
+                                                        <div className="flex-shrink-0">
+                                                            <img src={team.logo} alt={team.name} className="w-12 h-12 rounded-full border-2 border-white shadow-sm" />
                                                         </div>
-                                                        <div className="text-center sm:text-left">
-                                                            <div className="font-extrabold text-xl sm:text-2xl text-yellow-200">{team.name}</div>
-                                                            <div className="text-xs sm:text-sm text-gray-200 font-semibold">Owner: <span className="text-white font-bold">{team.owner}</span></div>
-                                                            <div className="text-xs sm:text-sm text-gray-300">Budget: <span className="text-yellow-100 font-semibold">₹{team.budget}</span></div>
-                                                            <div className="text-xs sm:text-sm text-gray-300">Remaining: <span className="text-yellow-100 font-semibold">₹{team.remainingBudget}</span></div>
+                                                    )}
+                                                    <div className="flex-1 min-w-0">
+                                                        <h3 className="font-bold text-lg text-gray-800 truncate">{team.name}</h3>
+                                                        <div className="flex items-center justify-between mt-1">
+                                                            <span className="text-xs font-medium text-gray-600">Budget Left:</span>
+                                                            <span className="text-sm font-bold text-blue-700">₹{team.remainingBudget}</span>
                                                         </div>
-                                                    </div>
-                                                    <div className="w-full">
-                                                        <div className="font-bold text-sm sm:text-base text-yellow-100 mb-1 sm:mb-2">Players:</div>
-                                                        {teamPlayers.length === 0 ? (
-                                                            <div className="text-xs sm:text-sm text-gray-300">No players in this team.</div>
-                                                        ) : (
-                                                            <div className="flex flex-wrap justify-center sm:justify-start gap-2 sm:gap-3 md:gap-4">
-                                                                {teamPlayers.map(player => (
-                                                                    <div key={player.id || (player as any)._id} className="flex flex-col items-center">
-                                                                        {player.photo ? (
-                                                                            <img src={player.photo} alt={player.name} className="w-10 h-10 sm:w-12 sm:h-12 rounded-full border-2 border-yellow-300 shadow object-cover mb-1" />
-                                                                        ) : (
-                                                                            <span className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-yellow-400 flex items-center justify-center text-[#232946] font-bold text-sm sm:text-lg border-2 border-yellow-300 shadow mb-1">{player.name[0]}</span>
-                                                                        )}
-                                                                        <span className="text-yellow-100 font-semibold text-xs sm:text-sm text-center max-w-[60px] sm:max-w-[80px] truncate">{player.name}</span>
-                                                                        {player.price && (
-                                                                            <span className="text-emerald-400 font-bold text-xs">₹{player.price}</span>
-                                                                        )}
-                                                                    </div>
-                                                                ))}
-                                                            </div>
-                                                        )}
                                                     </div>
                                                 </div>
-                                            );
-                                        })}
+
+                                                {/* Team Content */}
+                                                <div className="p-4">
+                                                    <button
+                                                        onClick={() => {
+                                                            console.log('Button clicked for teamId:', team._id);
+                                                            handleExpandTeam(team._id);
+                                                        }}
+                                                        className="w-full flex items-center justify-between py-2 px-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors"
+                                                    >
+                                                        <span className="text-sm font-medium text-gray-700">
+                                                            {expandedTeamId === team._id ? 'Hide squad' : 'View squad'}
+                                                        </span>
+                                                        <svg
+                                                            className={`w-4 h-4 text-gray-500 transition-transform ${expandedTeamId === team._id ? 'rotate-180' : ''}`}
+                                                            fill="none"
+                                                            viewBox="0 0 24 24"
+                                                            stroke="currentColor"
+                                                        >
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                                        </svg>
+                                                    </button>
+
+                                                    {expandedTeamId === team._id && (
+                                                        <div className="mt-4 space-y-3">
+                                                            {teamPlayersLoading[team._id] ? (
+                                                                <div className="flex justify-center py-4">
+                                                                    <div className="w-6 h-6 border-2 border-blue-400 border-t-transparent rounded-full animate-spin"></div>
+                                                                </div>
+                                                            ) : (
+                                                                teamPlayers[team._id]?.length > 0 ? (
+                                                                    teamPlayers[team._id]?.map(player => (
+                                                                        <div key={player._id} className="flex items-center gap-3 p-3 bg-white border border-gray-100 rounded-lg shadow-xs hover:bg-gray-50 transition-colors">
+                                                                            {player.photo && (
+                                                                                <img src={player.photo} alt={player.name} className="w-10 h-10 rounded-full border-2 border-white shadow-sm" />
+                                                                            )}
+                                                                            <div className="flex-1 min-w-0">
+                                                                                <h4 className="font-medium text-gray-800 truncate">{player.name}</h4>
+                                                                                <p className="text-xs text-gray-500">Base: ₹{player.basePrice ?? '-'}</p>
+                                                                            </div>
+                                                                            <span className="font-bold text-green-600 whitespace-nowrap">₹{player.price ?? '-'}</span>
+                                                                        </div>
+                                                                    ))
+                                                                ) : (
+                                                                    <div className="text-center py-4 text-gray-500 text-sm">
+                                                                        No players in this team yet
+                                                                    </div>
+                                                                )
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                </div>
+
+                                                {/* Team Footer */}
+
+                                            </div>
+                                        ))}
                                     </div>
                                 )}
                             </div>

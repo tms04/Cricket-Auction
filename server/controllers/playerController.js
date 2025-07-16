@@ -10,11 +10,45 @@ async function getAuctioneerTournament(email) {
 
 exports.getAllPlayers = async (req, res) => {
     try {
-        const players = await Player.find();
-        const filteredPlayers = req.user && req.user.role === 'auctioneer'
-            ? players.filter(player => String(player.tournamentId) === String(req.user.tournamentId))
-            : players;
-        res.json(filteredPlayers);
+        const page = parseInt(req.query.page) || 1;
+        const limit = req.query.limit ? parseInt(req.query.limit) : 0; // 0 means no limit
+        const skip = (page - 1) * limit;
+
+        // Build filter from query
+        const filter = {};
+        if (req.query.status) filter.status = req.query.status;
+        if (req.query.tournamentId) filter.tournamentId = req.query.tournamentId;
+        if (req.query.team) filter.team = req.query.team;
+
+        // Only allow fetching players for one team at a time
+        if (req.query.team) {
+            if (Array.isArray(req.query.team) || (typeof req.query.team === 'string' && req.query.team.includes(','))) {
+                return res.status(400).json({ error: 'You can only fetch players for one team at a time.' });
+            }
+        }
+
+        // Only select needed fields for the list view
+        let projection = 'name age team status price basePrice previousTeam location tournamentId';
+        if (req.query.team) {
+            projection += ' photo';
+        }
+        const players = await Player.find(filter)
+            .skip(skip)
+            .limit(limit)
+            .select(projection)
+            .populate('team', 'name');
+
+        // Add teamName property for sold players
+        const playersWithTeamName = players.map(player => {
+            const obj = player.toObject();
+            if (obj.status === 'sold' && obj.team && obj.team.name) {
+                obj.teamName = obj.team.name;
+            }
+            return obj;
+        });
+
+        const total = await Player.countDocuments(filter);
+        res.json({ players: playersWithTeamName, total });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

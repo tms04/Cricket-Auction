@@ -4,12 +4,12 @@ import { useApp } from '../../contexts/AppContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { Player } from '../../types';
 import * as XLSX from 'xlsx';
-import * as api from '../../api';
+import { fetchPlayers } from '../../api';
 
 const PlayerManager: React.FC = () => {
   const { players: contextPlayers, addPlayer, updatePlayer, deletePlayer, myTournament, tournaments } = useApp();
   const { user } = useAuth();
-  const [players, setPlayers] = useState<Player[]>(contextPlayers);
+  const [players, setPlayers] = useState<Player[]>(contextPlayers || []);
   const [showForm, setShowForm] = useState(false);
   const [editingPlayer, setEditingPlayer] = useState<Player | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -34,26 +34,24 @@ const PlayerManager: React.FC = () => {
   const [showExcelUpload, setShowExcelUpload] = useState(false);
   const [excelData, setExcelData] = useState<any[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
 
   const isAuctioneer = user?.role === 'auctioneer';
 
   useEffect(() => {
-    const fetchPlayers = async () => {
-      if (user?.role === 'auctioneer' && myTournament) {
-        const data = await api.fetchPlayers(myTournament.id);
-        setPlayers(data);
-      } else {
-        const data = await api.fetchPlayers();
-        setPlayers(data);
-      }
+    const fetchPaginatedPlayers = async () => {
+      const data = await fetchPlayers(page, 50);
+      setPlayers(data.players || []);
+      setTotal(data.total);
     };
-    fetchPlayers();
-  }, [user, myTournament]);
+    fetchPaginatedPlayers();
+  }, [page]);
 
   // Show only players for the current tournament if auctioneer
   const filteredPlayers = user?.role === 'auctioneer' && myTournament
-    ? players.filter(p => p.tournamentId === myTournament.id)
-    : players;
+    ? (players || []).filter(p => p.tournamentId === myTournament.id)
+    : (players || []);
 
   // Temporary fallback for testing
   const testCategories = [
@@ -144,11 +142,13 @@ const PlayerManager: React.FC = () => {
         showNotification('success', 'Player added successfully');
         // Refetch players after adding
         if (user?.role === 'auctioneer' && myTournament) {
-          const data = await api.fetchPlayers(myTournament.id);
-          setPlayers(data);
+          const data = await fetchPlayers(page, 50);
+          setPlayers(data.players || []);
+          setTotal(data.total);
         } else {
-          const data = await api.fetchPlayers();
-          setPlayers(data);
+          const data = await fetchPlayers(page, 50);
+          setPlayers(data.players || []);
+          setTotal(data.total);
         }
       }
       resetForm();
@@ -179,15 +179,17 @@ const PlayerManager: React.FC = () => {
   const handleDelete = async (player: Player) => {
     if (window.confirm(`Are you sure you want to delete "${player.name}"?`)) {
       try {
-        await api.deletePlayer(player.id);
+        await deletePlayer(player.id);
         showNotification('success', 'Player deleted successfully');
         // Refetch players after delete
         if (user?.role === 'auctioneer' && myTournament) {
-          const data = await api.fetchPlayers(myTournament.id);
-          setPlayers(data);
+          const data = await fetchPlayers(page, 50);
+          setPlayers(data.players || []);
+          setTotal(data.total);
         } else {
-          const data = await api.fetchPlayers();
-          setPlayers(data);
+          const data = await fetchPlayers(page, 50);
+          setPlayers(data.players || []);
+          setTotal(data.total);
         }
       } catch (error: any) {
         const errorMessage = error.response?.data?.error || error.message || 'Failed to delete player';
@@ -444,7 +446,7 @@ const PlayerManager: React.FC = () => {
 
       {/* Players Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredPlayers.map((player) => (
+        {(filteredPlayers || []).map((player) => (
           <div key={player.id} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
             <div className="flex justify-between items-start mb-4">
               <div className="flex items-center space-x-3">
@@ -482,6 +484,25 @@ const PlayerManager: React.FC = () => {
             </div>
           </div>
         ))}
+      </div>
+
+      {/* Pagination Controls */}
+      <div className="flex justify-center items-center space-x-4 mt-6">
+        <button
+          onClick={() => setPage(page - 1)}
+          disabled={page === 1}
+          className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors disabled:opacity-50"
+        >
+          Previous
+        </button>
+        <span>Page {page}</span>
+        <button
+          onClick={() => setPage(page + 1)}
+          disabled={page * 50 >= total}
+          className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors disabled:opacity-50"
+        >
+          Next
+        </button>
       </div>
 
       {filteredPlayers.length === 0 && (
@@ -742,11 +763,11 @@ const PlayerManager: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {excelData.slice(0, 10).map((row: any, index: number) => (
+                  {(excelData || []).slice(0, 10).map((row: any, index: number) => (
                     <tr key={index} className="hover:bg-gray-50">
                       <td className="border px-3 py-2 text-sm">{row.Name || row.name || '-'}</td>
                       <td className="border px-3 py-2 text-sm">{row['Base Price'] || row.basePrice || row['BasePrice'] || '-'}</td>
-                      <td className="border px-3 py-2 text-sm">{row['Previous Team'] || row.image.pngpreviousTeam || row['PreviousTeam'] || '-'}</td>
+                      <td className="border px-3 py-2 text-sm">{row['Previous Team'] || row.previousTeam || row['PreviousTeam'] || '-'}</td>
                       <td className="border px-3 py-2 text-sm">{row.Station || row.station || '-'}</td>
                       <td className="border px-3 py-2 text-sm">{row.Age || row.age || '-'}</td>
                       <td className="border px-3 py-2 text-sm">{row.Category || row.category || '-'}</td>
@@ -755,10 +776,10 @@ const PlayerManager: React.FC = () => {
                       <td className="border px-3 py-2 text-sm">{row.BowlingStyle || row.bowlingStyle || '-'}</td>
                     </tr>
                   ))}
-                  {excelData.length > 10 && (
+                  {(excelData || []).length > 10 && (
                     <tr>
                       <td colSpan={6} className="border px-3 py-2 text-sm text-gray-500 text-center">
-                        ... and {excelData.length - 10} more players
+                        ... and {(excelData || []).length - 10} more players
                       </td>
                     </tr>
                   )}
@@ -782,7 +803,7 @@ const PlayerManager: React.FC = () => {
                 disabled={uploading}
                 className="flex-1 py-2 px-4 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50"
               >
-                {uploading ? 'Importing...' : `Import ${excelData.length} Players`}
+                {uploading ? 'Importing...' : `Import ${(excelData || []).length} Players`}
               </button>
             </div>
           </div>

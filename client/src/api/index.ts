@@ -65,14 +65,6 @@ export const deleteTournament = async (id: string) => {
 };
 
 // Teams
-export const fetchTeams = async () => {
-    const res = await axios.get(`${API_BASE}/teams`);
-    // Map _id to id for React key props
-    return res.data.map((team: any) => ({
-        ...team,
-        id: team._id || team.id,
-    }));
-};
 export const createTeam = async (data: any) => {
     const res = await axios.post(`${API_BASE}/teams`, data, { headers: authHeader() });
     // Map _id to id for consistency
@@ -98,18 +90,6 @@ export const deleteTeam = async (id: string) => {
 };
 
 // Players
-export const fetchPlayers = async (tournamentId?: string) => {
-    let url = `${API_BASE}/players`;
-    if (tournamentId) {
-        url += `?tournamentId=${tournamentId}`;
-    }
-    const res = await axios.get(url);
-    // Map _id to id for React key props
-    return res.data.map((player: any) => ({
-        ...player,
-        id: player._id || player.id,
-    }));
-};
 export const createPlayer = async (data: any) => {
     const res = await axios.post(`${API_BASE}/players`, data, { headers: authHeader() });
     // Map _id to id for consistency
@@ -185,4 +165,23 @@ export const fetchPlayerSummaries = async (tournamentId?: string) => {
         ...player,
         id: player._id || player.id,
     }));
-}; 
+};
+
+// Only keep the paginated versions:
+export async function fetchPlayers(page = 1, limit = 50, tournamentId?: string) {
+    let url = `/api/players?page=${page}&limit=${limit}`;
+    if (tournamentId) {
+        url += `&tournamentId=${tournamentId}`;
+    }
+    const res = await axios.get(url);
+    return res.data; // { players, total }
+}
+
+export async function fetchTeams(page = 1, limit = 20, tournamentId?: string) {
+    let url = `/api/teams?page=${page}&limit=${limit}`;
+    if (tournamentId) {
+        url += `&tournamentId=${tournamentId}`;
+    }
+    const res = await axios.get(url);
+    return res.data; // { teams, total }
+} 

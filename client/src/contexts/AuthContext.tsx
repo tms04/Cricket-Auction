@@ -8,6 +8,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [token, setToken] = useState<string | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
 
   useEffect(() => {
     // Try to restore session from localStorage
@@ -18,17 +19,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       api.getMe().then(userData => {
         setUser(userData);
         setIsAuthenticated(true);
+        setAuthLoading(false);
       }).catch(() => {
         setUser(null);
         setIsAuthenticated(false);
         setToken(null);
         api.setToken(null);
         localStorage.removeItem('auction_jwt');
+        setAuthLoading(false);
       });
+    } else {
+      setAuthLoading(false);
     }
   }, []);
 
   const login = async (email: string, password: string): Promise<boolean> => {
+    setAuthLoading(true);
     try {
       const res = await api.login(email, password);
       setToken(res.token);
@@ -36,6 +42,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       localStorage.setItem('auction_jwt', res.token);
       setUser(res.user);
       setIsAuthenticated(true);
+      setAuthLoading(false);
       return true;
     } catch (err) {
       setUser(null);
@@ -43,6 +50,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setToken(null);
       api.setToken(null);
       localStorage.removeItem('auction_jwt');
+      setAuthLoading(false);
       return false;
     }
   };
@@ -56,7 +64,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, isAuthenticated }}>
+    <AuthContext.Provider value={{ user, login, logout, isAuthenticated, authLoading }}>
       {children}
     </AuthContext.Provider>
   );

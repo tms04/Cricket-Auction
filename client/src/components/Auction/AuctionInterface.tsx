@@ -153,20 +153,20 @@ const AuctionInterface: React.FC = () => {
 
   const handleBid = async (teamId: string, amount: number) => {
     if (!activeAuction) return;
-
-    // Log the payload for debugging
-    console.log('Placing bid with:', {
-      auctionId: activeAuction.id,
-      teamId,
-      amount
-    });
-
     try {
+      // Call placeBid and then find the updated auction in context
       const success = await placeBid(activeAuction.id, teamId, amount);
       if (success) {
+        // Find the updated auction in context
+        const updatedAuction = auctions.find(a => a.id === activeAuction.id);
+        if (updatedAuction) {
+          setCurrentBid(updatedAuction.bidAmount || amount);
+          setCurrentBidder(updatedAuction.currentBidder || teamId);
+        } else {
+          setCurrentBid(amount);
+          setCurrentBidder(teamId);
+        }
         showNotification('success', `Bid placed successfully: ${formatCurrency(amount)}`);
-        setCurrentBid(amount);
-        setCurrentBidder(teamId);
       } else {
         showNotification('error', 'Failed to place bid');
       }
@@ -470,6 +470,12 @@ const AuctionInterface: React.FC = () => {
                   </div>
                   <div className="mt-2 text-sm text-gray-600">
                     <span className="font-medium">Base Price:</span> {formatCurrency(currentPlayer.basePrice || 0)}
+                  </div>
+                  <div className="mt-2 text-lg font-semibold text-yellow-700">
+                    Current Bid: {formatCurrency(currentBid)}
+                  </div>
+                  <div className="mt-1 text-md font-semibold text-yellow-800">
+                    Current Bidder: {(() => { const team = getCurrentBidderTeam(); return team ? team.name : '-'; })()}
                   </div>
                 </div>
               </div>

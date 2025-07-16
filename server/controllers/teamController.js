@@ -9,8 +9,24 @@ async function getAuctioneerTournament(email) {
 
 exports.getAllTeams = async (req, res) => {
     try {
-        const teams = await Team.find().populate('players');
-        res.json(teams);
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 20;
+        const skip = (page - 1) * limit;
+
+        // Add tournamentId filter if provided
+        const filter = {};
+        if (req.query.tournamentId) {
+            filter.tournamentId = req.query.tournamentId;
+        }
+
+        // Only select needed fields for the list view
+        const teams = await Team.find(filter)
+            .skip(skip)
+            .limit(limit)
+            .select('name budget remainingBudget players tournamentId color logo owner');
+
+        const total = await Team.countDocuments(filter);
+        res.json({ teams, total });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

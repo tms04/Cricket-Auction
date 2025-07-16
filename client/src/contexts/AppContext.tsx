@@ -3,6 +3,7 @@ import { AppContextType, Tournament, Team, Player, AuctionItem } from '../types'
 import * as api from '../api';
 import { io, Socket } from 'socket.io-client';
 import { useAuth } from './AuthContext';
+import { fetchPlayers as fetchPlayersApi, fetchTeams as fetchTeamsApi } from '../api';
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
@@ -14,89 +15,114 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isLoading, setIsLoading] = useState(true);
   const [socket, setSocket] = useState<Socket | null>(null);
   const [activeTournament, setActiveTournament] = useState<Tournament | null>(null);
-  const { user } = useAuth();
+  const { user, authLoading } = useAuth();
+
+  // Add debug logs before the myTournament memo
+  console.log('User:', user);
+  console.log('Tournaments:', tournaments);
 
   // Find the auctioneer's tournament
   const myTournament = React.useMemo(() => {
     if (!user || user.role !== 'auctioneer') return null;
-    return tournaments.find(
+    const found = tournaments.find(
       (t) => t.auctioneerEmail && user.email && t.auctioneerEmail.toLowerCase() === user.email.toLowerCase()
     ) || null;
+    console.log('myTournament:', found);
+    return found;
   }, [user, tournaments]);
 
   // Fetch all data from backend on mount or when user id changes
   useEffect(() => {
+    if (authLoading) return;
+    if (!user) {
+      setIsLoading(false);
+      return;
+    }
+    let cancelled = false;
     const fetchAll = async () => {
       setIsLoading(true);
       try {
         // Always fetch tournaments for everyone
         const tournamentsData = await api.fetchTournaments();
-        if (!Array.isArray(tournamentsData)) {
-          setTournaments([]);
-        } else {
-          const mappedTournaments = tournamentsData.map((t: any) => ({
+        const safeTournaments = Array.isArray(tournamentsData) ? tournamentsData : [];
+        setTournaments(
+          safeTournaments.map((t: any) => ({
             ...t,
-            id: t._id,
+            id: t._id || t.id,
             maxTeams: Number(t.maxTeams),
             budget: Number(t.budget),
             status: t.status || 'upcoming'
-          }));
-          setTournaments(mappedTournaments);
-        }
+          }))
+        );
 
         // Only fetch teams, players, and auctions if user is present
-        if (user && user.id) {
+        if (user && user.id && !cancelled) {
           const [teamsData, playersData, auctionsData] = await Promise.all([
-            api.fetchTeams(),
-            api.fetchPlayerSummaries(),
+            fetchTeamsApi(1, 20, myTournament?.id),
+            fetchPlayersApi(1, 50, myTournament?.id),
             api.fetchAuctions()
           ]);
-          setTeams(teamsData.map((t: any) => ({
+          const safeTeams = Array.isArray(teamsData?.teams) ? teamsData.teams : [];
+          setTeams(safeTeams.map((t: any) => ({
             ...t,
             id: t._id || t.id
           })));
-          setPlayers(playersData.map((p: any) => ({
+          const safePlayers = Array.isArray(playersData?.players) ? playersData.players : [];
+          setPlayers(safePlayers.map((p: any) => ({
             ...p,
             id: p._id || p.id
           })));
-          setAuctions(auctionsData.map((a: any) => ({
+          const safeAuctions = Array.isArray(auctionsData) ? auctionsData : [];
+          setAuctions(safeAuctions.map((a: any) => ({
             ...a,
             id: a._id || a.id,
             currentBidder: typeof a.currentBidder === 'object' && a.currentBidder !== null
               ? a.currentBidder._id || a.currentBidder.id
               : a.currentBidder
           })));
-        } else {
+        } else if (!user && !cancelled) {
           setTeams([]);
           setPlayers([]);
           setAuctions([]);
         }
       } catch (err) {
-        setTournaments([]);
-        setTeams([]);
-        setPlayers([]);
-        setAuctions([]);
+        // Do not clear tournaments on error, just log
+        console.error('Failed to fetch tournaments or related data', err);
       } finally {
-        setIsLoading(false);
+        if (!cancelled) setIsLoading(false);
       }
     };
     fetchAll();
-  }, [user?.id]);
+    return () => { cancelled = true; };
+  }, [user?.id, authLoading]);
+
+  // Cleanup tournaments ONLY on logout
+  useEffect(() => {
+    if (!user && !authLoading) {
+      setTournaments([]);
+      setTeams([]);
+      setPlayers([]);
+      setAuctions([]);
+    }
+  }, [user, authLoading]);
 
   // Backend CRUD operations
   const addTournament = async (tournament: Omit<Tournament, 'id' | 'createdAt'>) => {
     const newTournament = await api.createTournament(tournament);
     const tournamentsData = await api.fetchTournaments();
-    setTournaments(tournamentsData.map((t: any) => ({
-      ...t,
-      id: t._id,
-      maxTeams: Number(t.maxTeams),
-      budget: Number(t.budget),
-      status: t.status || 'upcoming'
-    })));
+    setTournaments(Array.isArray(tournamentsData)
+      ? tournamentsData.map((t: any) => ({
+        ...t,
+        id: t._id || t.id,
+        maxTeams: Number(t.maxTeams),
+        budget: Number(t.budget),
+        status: t.status || 'upcoming'
+      }))
+      : []
+    );
     return {
       ...newTournament,
-      id: newTournament._id,
+      id: newTournament._id || newTournament.id,
       maxTeams: Number(newTournament.maxTeams),
       budget: Number(newTournament.budget),
       status: newTournament.status || 'upcoming'
@@ -104,13 +130,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
   const updateTournament = async (id: string, updates: Partial<Tournament>) => {
     const updated = await api.updateTournament(id, updates);
-    setTournaments(prev => prev.map(t => t.id === id ? {
-      ...updated,
-      id: updated._id,
-      maxTeams: Number(updated.maxTeams),
-      budget: Number(updated.budget),
-      status: updated.status || 'upcoming'
-    } : t));
+    setTournaments(prev => prev.map(t => (t.id === id
+      ? {
+        ...updated,
+        id: updated._id || updated.id,
+        maxTeams: Number(updated.maxTeams),
+        budget: Number(updated.budget),
+        status: updated.status || 'upcoming'
+      }
+      : t
+    )));
   };
   const deleteTournament = async (id: string) => {
     await api.deleteTournament(id);
@@ -121,8 +150,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const addTeam = async (team: Omit<Team, 'id'>) => {
     const newTeam = await api.createTeam(team);
-    const teamsData = await api.fetchTeams();
-    setTeams(teamsData.map((t: any) => ({
+    const teamsData = await fetchTeamsApi(1, 20, myTournament?.id);
+    const safeTeams = Array.isArray(teamsData?.teams) ? teamsData.teams : [];
+    setTeams(safeTeams.map((t: any) => ({
       ...t,
       id: t._id || t.id
     })));
@@ -142,8 +172,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const addPlayer = async (player: Omit<Player, 'id'>) => {
     const newPlayer = await api.createPlayer(player);
     // Refetch the full list to ensure state is in sync with backend
-    const playersData = await api.fetchPlayerSummaries();
-    setPlayers(playersData.map((p: any) => ({
+    const playersData = await fetchPlayersApi(1, 50, myTournament?.id);
+    const safePlayers = Array.isArray(playersData?.players) ? playersData.players : [];
+    setPlayers(safePlayers.map((p: any) => ({
       ...p,
       id: p._id || p.id
     })));
@@ -153,8 +184,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const updatePlayer = async (id: string, updates: Partial<Player>) => {
     await api.updatePlayer(id, updates);
     // Refetch the full list to ensure state is in sync with backend
-    const playersData = await api.fetchPlayerSummaries();
-    setPlayers(playersData.map((p: any) => ({
+    const playersData = await fetchPlayersApi(1, 50, myTournament?.id);
+    const safePlayers = Array.isArray(playersData?.players) ? playersData.players : [];
+    setPlayers(safePlayers.map((p: any) => ({
       ...p,
       id: p._id || p.id
     })));
@@ -162,8 +194,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const deletePlayer = async (id: string) => {
     await api.deletePlayer(id);
     // Refetch the full list to ensure state is in sync with backend
-    const playersData = await api.fetchPlayerSummaries();
-    setPlayers(playersData.map((p: any) => ({
+    const playersData = await fetchPlayersApi(1, 50, myTournament?.id);
+    const safePlayers = Array.isArray(playersData?.players) ? playersData.players : [];
+    setPlayers(safePlayers.map((p: any) => ({
       ...p,
       id: p._id || p.id
     })));
@@ -234,11 +267,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const completedAuction = await api.completeAuction(auctionId, winnerId, finalAmount);
       // Always refetch players and teams after auction completion to ensure up-to-date state
       const [playersData, teamsData] = await Promise.all([
-        api.fetchPlayers(),
-        api.fetchTeams()
+        fetchPlayersApi(1, 50, myTournament?.id),
+        fetchTeamsApi(1, 20, myTournament?.id)
       ]);
-      setPlayers(playersData.map((p: any) => ({ ...p, id: p._id || p.id })));
-      setTeams(teamsData.map((t: any) => ({ ...t, id: t._id || t.id })));
+      const safePlayers = Array.isArray(playersData?.players) ? playersData.players : [];
+      setPlayers(safePlayers.map((p: any) => ({ ...p, id: p._id || p.id })));
+      const safeTeams = Array.isArray(teamsData?.teams) ? teamsData.teams : [];
+      setTeams(safeTeams.map((t: any) => ({ ...t, id: t._id || t.id })));
       return true;
     } catch (error) {
       return false;
@@ -251,13 +286,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       await api.resetAuctions(myTournament.id);
       // Refetch all data to update state
       const [playersData, teamsData, auctionsData] = await Promise.all([
-        api.fetchPlayers(),
-        api.fetchTeams(),
+        fetchPlayersApi(1, 50, myTournament?.id),
+        fetchTeamsApi(1, 20, myTournament?.id),
         api.fetchAuctions()
       ]);
-      setPlayers(playersData.map((p: any) => ({ ...p, id: p._id || p.id })));
-      setTeams(teamsData.map((t: any) => ({ ...t, id: t._id || t.id })));
-      setAuctions(auctionsData.map((a: any) => ({
+      const safePlayers = Array.isArray(playersData?.players) ? playersData.players : [];
+      setPlayers(safePlayers.map((p: any) => ({ ...p, id: p._id || p.id })));
+      const safeTeams = Array.isArray(teamsData?.teams) ? teamsData.teams : [];
+      setTeams(safeTeams.map((t: any) => ({ ...t, id: t._id || t.id })));
+      const safeAuctions = Array.isArray(auctionsData) ? auctionsData : [];
+      setAuctions(safeAuctions.map((a: any) => ({
         ...a,
         id: a._id || a.id,
         currentBidder: typeof a.currentBidder === 'object' && a.currentBidder !== null
@@ -270,18 +308,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Fetch teams and players for manual refresh
   const fetchTeams = async () => {
-    const teamsData = await api.fetchTeams();
-    setTeams(teamsData.map((t: any) => ({ ...t, id: t._id || t.id })));
+    const teamsData = await fetchTeamsApi(1, 20, myTournament?.id);
+    const safeTeams = Array.isArray(teamsData?.teams) ? teamsData.teams : [];
+    setTeams(safeTeams.map((t: any) => ({ ...t, id: t._id || t.id })));
   };
   const fetchPlayers = async () => {
-    const playersData = await api.fetchPlayerSummaries();
-    setPlayers(playersData.map((p: any) => ({ ...p, id: p._id || p.id })));
+    const playersData = await fetchPlayersApi(1, 50, myTournament?.id);
+    const safePlayers = Array.isArray(playersData?.players) ? playersData.players : [];
+    setPlayers(safePlayers.map((p: any) => ({ ...p, id: p._id || p.id })));
   };
 
   // Fetch auctions for polling (public)
   const fetchAuctions = async () => {
     const auctionsData = await api.fetchAuctions();
-    setAuctions(auctionsData.map((a: any) => ({
+    const safeAuctions = Array.isArray(auctionsData) ? auctionsData : [];
+    setAuctions(safeAuctions.map((a: any) => ({
       ...a,
       id: a._id || a.id,
       currentBidder: typeof a.currentBidder === 'object' && a.currentBidder !== null
@@ -290,7 +331,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     })));
   };
 
-  if (isLoading) {
+  // Only show loading spinner for authenticated users
+  if (user && isLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">

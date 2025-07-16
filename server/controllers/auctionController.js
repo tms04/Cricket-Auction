@@ -115,13 +115,14 @@ exports.placeBid = async (req, res) => {
 
         // Update current bid
         auction.bidAmount = amount;
-        auction.currentBidder = teamId;
+        auction.currentBidder = teamId; // <--- Ensure this is always set
 
         await auction.save();
 
         const auctionObj = auction.toObject ? auction.toObject() : auction;
         auctionObj.playerId = auctionObj.player ? String(auctionObj.player) : undefined;
         delete auctionObj.player;
+        auctionObj.currentBidder = auctionObj.currentBidder ? String(auctionObj.currentBidder) : null; // <--- Always return as string
         res.json(auctionObj);
     } catch (err) {
         console.error('Error in placeBid:', err);
@@ -131,41 +132,43 @@ exports.placeBid = async (req, res) => {
 
 exports.completeAuction = async (req, res) => {
     try {
+        console.time("completeAuction_total");
         const { auctionId, winnerId, finalAmount } = req.body;
 
+        console.time("findAuction");
         const auction = await Auction.findById(auctionId);
-        if (!auction) {
-            return res.status(404).json({ error: 'Auction not found' });
-        }
+        console.timeEnd("findAuction");
+        if (!auction) return res.status(404).json({ error: 'Auction not found' });
 
-        if (auction.status !== 'active') {
-            return res.status(400).json({ error: 'Auction is already completed' });
-        }
+        if (auction.status !== 'active') return res.status(400).json({ error: 'Auction is already completed' });
 
+        let teamPromise = null;
+        let playerPromise = null;
         let updatedTeam = null;
+        let player = null;
         if (winnerId) {
-            // Player was sold
+            console.time("findTeam");
             const team = await Team.findById(winnerId);
-            if (!team) {
-                return res.status(404).json({ error: 'Winning team not found' });
-            }
+            console.timeEnd("findTeam");
+            if (!team) return res.status(404).json({ error: 'Winning team not found' });
 
-            // Use finalAmount if provided, otherwise use auction.bidAmount
             const saleAmount = finalAmount || auction.bidAmount;
 
-            // Update team budget
+            // Prepare team update
             team.remainingBudget -= saleAmount;
             team.players.push(auction.player);
-            await team.save();
+            teamPromise = team.save();
             updatedTeam = team;
 
-            // Update player status
-            const player = await Player.findById(auction.player);
+            // Prepare player update
+            console.time("findPlayer");
+            player = await Player.findById(auction.player);
+            console.timeEnd("findPlayer");
             if (player) {
                 player.status = 'sold';
                 player.team = winnerId;
                 player.price = saleAmount;
-                await player.save();
+                playerPromise = player.save();
             }
 
             // Update auction
@@ -175,20 +178,24 @@ exports.completeAuction = async (req, res) => {
             auction.bidAmount = saleAmount;
         } else {
             // Player went unsold
-            const player = await Player.findById(auction.player);
+            player = await Player.findById(auction.player);
             if (player) {
                 player.status = 'unsold';
-                await player.save();
+                playerPromise = player.save();
             }
-
             auction.status = 'unsold';
         }
 
-        await auction.save();
+        console.time("saveAuction");
+        const auctionPromise = auction.save();
+        // Save all in parallel
+        await Promise.all([teamPromise, playerPromise, auctionPromise].filter(Boolean));
+        console.timeEnd("saveAuction");
 
         const auctionObj = auction.toObject ? auction.toObject() : auction;
         auctionObj.playerId = auctionObj.player ? String(auctionObj.player) : undefined;
         delete auctionObj.player;
+        console.timeEnd("completeAuction_total");
         res.json(auctionObj);
     } catch (err) {
         console.error('Error in completeAuction:', err);
@@ -261,8 +268,28 @@ exports.getCurrentAuction = async (req, res) => {
     try {
         const { tournamentId } = req.query;
         if (!tournamentId) return res.status(400).json({ error: 'tournamentId required' });
-        const auction = await Auction.findOne({ tournamentId, status: 'active' });
-        res.json(auction || null);
+        const auction = await Auction.findOne({ tournamentId, status: 'active' })
+            .populate('player team currentBidder winner bids.team');
+        if (!auction) return res.json(null);
+        const auctionObj = auction.toObject ? auction.toObject() : auction;
+        // Ensure playerId is always a string
+        if (auctionObj.player && typeof auctionObj.player === 'object' && auctionObj.player._id) {
+            auctionObj.playerId = String(auctionObj.player._id);
+        } else if (auctionObj.player) {
+            auctionObj.playerId = String(auctionObj.player);
+        } else {
+            auctionObj.playerId = undefined;
+        }
+        delete auctionObj.player;
+        // Ensure currentBidder is always a string
+        if (auctionObj.currentBidder && typeof auctionObj.currentBidder === 'object' && auctionObj.currentBidder._id) {
+            auctionObj.currentBidder = String(auctionObj.currentBidder._id);
+        } else if (auctionObj.currentBidder) {
+            auctionObj.currentBidder = String(auctionObj.currentBidder);
+        } else {
+            auctionObj.currentBidder = null;
+        }
+        res.json(auctionObj);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

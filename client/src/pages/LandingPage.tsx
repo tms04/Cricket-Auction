@@ -7,21 +7,7 @@ const BASE_URL = import.meta.env.VITE_API_URL || 'https://bidkaroo.techgg.org';
 const API_BASE = BASE_URL.endsWith('/api') ? BASE_URL : `${BASE_URL}/api`;
 
 const LandingPage: React.FC = () => {
-    const [tournaments, setTournaments] = useState<Tournament[]>([]);
-    const [loading, setLoading] = useState(true);
-
-    useEffect(() => {
-        fetch(`${API_BASE}/tournaments`)
-            .then(res => res.json())
-            .then(data => setTournaments(data))
-            .finally(() => setLoading(false));
-    }, []);
-
-    const grouped = {
-        current: tournaments.filter(t => t.status === 'active'),
-        upcoming: tournaments.filter(t => t.status === 'upcoming'),
-        past: tournaments.filter(t => t.status === 'completed'),
-    };
+    // Removed tournaments and loading state
 
     return (
         <div className="min-h-screen w-full flex flex-col items-center justify-start relative overflow-x-hidden bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
@@ -158,101 +144,62 @@ const LandingPage: React.FC = () => {
             </section>
 
             {/* Tournament Schedule Section */}
-            <section className="w-full max-w-7xl mx-auto my-16 px-4 z-20">
+            {/* <section className="w-full max-w-7xl mx-auto my-16 px-4 z-20">
                 <h2 className="text-3xl md:text-4xl font-bold text-center text-white mb-16">
                     <span className="relative">
                         <span className="relative z-10">Tournament Schedule</span>
                         <span className="absolute bottom-0 left-0 w-full h-2 bg-yellow-500/30 -z-1" style={{ bottom: '5px' }}></span>
-                    </span>
-                </h2>
+                    </span> */}
+            {/* </h2> */}
 
-                {loading ? (
-                    <div className="text-center py-16">
-                        <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-yellow-500 mb-4"></div>
-                        <p className="text-gray-400">Loading tournaments...</p>
-                    </div>
-                ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                        <Link
-                            to="/viewer?tab=current"
-                            className="bg-gradient-to-br from-green-900/50 to-green-800/50 rounded-xl p-6 border border-green-700/50 hover:border-green-500 transition-all duration-300 group"
-                        >
-                            <div className="flex items-center gap-3 mb-6">
-                                <div className="w-12 h-12 bg-green-600/20 rounded-lg flex items-center justify-center border border-green-500/30 group-hover:bg-green-600/30 transition-colors">
-                                    <Clock className="w-5 h-5 text-green-400" />
-                                </div>
-                                <h3 className="text-xl font-bold text-white">Live Matches</h3>
+            {/* Removed loading and tournament-related code */}
+            {/* <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                    <Link
+                        to="/viewer?tab=current"
+                        className="bg-gradient-to-br from-green-900/50 to-green-800/50 rounded-xl p-6 border border-green-700/50 hover:border-green-500 transition-all duration-300 group"
+                    >
+                        <div className="flex items-center gap-3 mb-6">
+                            <div className="w-12 h-12 bg-green-600/20 rounded-lg flex items-center justify-center border border-green-500/30 group-hover:bg-green-600/30 transition-colors">
+                                <Clock className="w-5 h-5 text-green-400" />
                             </div>
+                            <h3 className="text-xl font-bold text-white">Live Matches</h3>
+                        </div> */}
 
-                            {grouped.current.length === 0 ? (
-                                <p className="text-gray-400 text-center py-4">No active tournaments</p>
-                            ) : (
-                                <div className="space-y-4">
-                                    {grouped.current.map(t => (
-                                        <div key={t.id} className="bg-gray-800/50 rounded-lg p-4 border border-gray-700 hover:border-green-500/50 transition-colors">
-                                            <div className="font-bold text-white">{t.name}</div>
-                                            <div className="text-sm text-gray-400 mt-1">{t.startDate} - {t.endDate}</div>
-                                            <div className="text-xs text-green-400 mt-2">Budget: ₹{t.budget.toLocaleString()}</div>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-                        </Link>
+            {/* Removed tournament list rendering */}
+            {/* <p className="text-gray-400 text-center py-4">No active tournaments</p>
+                    </Link>
 
-                        <Link
-                            to="/viewer?tab=upcoming"
-                            className="bg-gradient-to-br from-yellow-900/50 to-yellow-800/50 rounded-xl p-6 border border-yellow-700/50 hover:border-yellow-500 transition-all duration-300 group"
-                        >
-                            <div className="flex items-center gap-3 mb-6">
-                                <div className="w-12 h-12 bg-yellow-600/20 rounded-lg flex items-center justify-center border border-yellow-500/30 group-hover:bg-yellow-600/30 transition-colors">
-                                    <Calendar className="w-5 h-5 text-yellow-400" />
-                                </div>
-                                <h3 className="text-xl font-bold text-white">Upcoming</h3>
+                    <Link
+                        to="/viewer?tab=upcoming"
+                        className="bg-gradient-to-br from-yellow-900/50 to-yellow-800/50 rounded-xl p-6 border border-yellow-700/50 hover:border-yellow-500 transition-all duration-300 group"
+                    >
+                        <div className="flex items-center gap-3 mb-6">
+                            <div className="w-12 h-12 bg-yellow-600/20 rounded-lg flex items-center justify-center border border-yellow-500/30 group-hover:bg-yellow-600/30 transition-colors">
+                                <Calendar className="w-5 h-5 text-yellow-400" />
                             </div>
+                            <h3 className="text-xl font-bold text-white">Upcoming</h3>
+                        </div> */}
 
-                            {grouped.upcoming.length === 0 ? (
-                                <p className="text-gray-400 text-center py-4">No upcoming tournaments</p>
-                            ) : (
-                                <div className="space-y-4">
-                                    {grouped.upcoming.map(t => (
-                                        <div key={t.id} className="bg-gray-800/50 rounded-lg p-4 border border-gray-700 hover:border-yellow-500/50 transition-colors">
-                                            <div className="font-bold text-white">{t.name}</div>
-                                            <div className="text-sm text-gray-400 mt-1">{t.startDate} - {t.endDate}</div>
-                                            <div className="text-xs text-yellow-400 mt-2">Budget: ₹{t.budget.toLocaleString()}</div>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-                        </Link>
+            {/* Removed tournament list rendering */}
+            {/* <p className="text-gray-400 text-center py-4">No upcoming tournaments</p>
+                    </Link>
 
-                        <Link
-                            to="/viewer?tab=past"
-                            className="bg-gradient-to-br from-gray-900/50 to-gray-800/50 rounded-xl p-6 border border-gray-700/50 hover:border-gray-500 transition-all duration-300 group"
-                        >
-                            <div className="flex items-center gap-3 mb-6">
-                                <div className="w-12 h-12 bg-gray-600/20 rounded-lg flex items-center justify-center border border-gray-500/30 group-hover:bg-gray-600/30 transition-colors">
-                                    <Trophy className="w-5 h-5 text-gray-400" />
-                                </div>
-                                <h3 className="text-xl font-bold text-white">Completed</h3>
+                    <Link
+                        to="/viewer?tab=past"
+                        className="bg-gradient-to-br from-gray-900/50 to-gray-800/50 rounded-xl p-6 border border-gray-700/50 hover:border-gray-500 transition-all duration-300 group"
+                    >
+                        <div className="flex items-center gap-3 mb-6">
+                            <div className="w-12 h-12 bg-gray-600/20 rounded-lg flex items-center justify-center border border-gray-500/30 group-hover:bg-gray-600/30 transition-colors">
+                                <Trophy className="w-5 h-5 text-gray-400" />
                             </div>
+                            <h3 className="text-xl font-bold text-white">Completed</h3>
+                        </div> */}
 
-                            {grouped.past.length === 0 ? (
-                                <p className="text-gray-400 text-center py-4">No completed tournaments</p>
-                            ) : (
-                                <div className="space-y-4">
-                                    {grouped.past.map(t => (
-                                        <div key={t.id} className="bg-gray-800/50 rounded-lg p-4 border border-gray-700 hover:border-gray-500/50 transition-colors">
-                                            <div className="font-bold text-white">{t.name}</div>
-                                            <div className="text-sm text-gray-400 mt-1">{t.startDate} - {t.endDate}</div>
-                                            <div className="text-xs text-gray-400 mt-2">Budget: ₹{t.budget.toLocaleString()}</div>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-                        </Link>
-                    </div>
-                )}
-            </section>
+            {/* Removed tournament list rendering */}
+            {/* <p className="text-gray-400 text-center py-4">No completed tournaments</p>
+                    </Link>
+                </div>
+            </section> */}
 
             {/* Testimonials Section */}
             {/* <section className="w-full max-w-7xl mx-auto my-16 px-4 z-20">
