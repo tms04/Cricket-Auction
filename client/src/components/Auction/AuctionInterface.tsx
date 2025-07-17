@@ -15,7 +15,8 @@ const AuctionInterface: React.FC = () => {
     placeBid,
     completeAuction,
     resetPlayerStatuses,
-    updatePlayer
+    updatePlayer,
+    fetchAuctions // Use fetchAuctions to refresh auctions
   } = useApp();
   const { user } = useAuth();
 

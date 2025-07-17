@@ -59,6 +59,11 @@ exports.createAuction = async (req, res) => {
         const savedAuction = await newAuction.save();
         console.log('Auction saved successfully:', savedAuction);
         const auctions = await Auction.find().populate('player team currentBidder winner bids.team');
+        // Emit socket event for auction creation
+        const io = req.app.get('io');
+        if (io && savedAuction.tournamentId) {
+            io.emit(`auction_update_${savedAuction.tournamentId}`, savedAuction);
+        }
         res.status(201).json(savedAuction.toObject ? savedAuction.toObject() : savedAuction);
     } catch (err) {
         console.error('Error in createAuction:', err);
@@ -118,6 +123,12 @@ exports.placeBid = async (req, res) => {
         auction.currentBidder = teamId; // <--- Ensure this is always set
 
         await auction.save();
+
+        // Emit socket event for bid update
+        const io = req.app.get('io');
+        if (io && auction.tournamentId) {
+            io.emit(`auction_update_${auction.tournamentId}`, auction);
+        }
 
         const auctionObj = auction.toObject ? auction.toObject() : auction;
         auctionObj.playerId = auctionObj.player ? String(auctionObj.player) : undefined;
@@ -191,6 +202,12 @@ exports.completeAuction = async (req, res) => {
         // Save all in parallel
         await Promise.all([teamPromise, playerPromise, auctionPromise].filter(Boolean));
         console.timeEnd("saveAuction");
+
+        // Emit socket event for auction completion
+        const io = req.app.get('io');
+        if (io && auction.tournamentId) {
+            io.emit(`auction_update_${auction.tournamentId}`, auction);
+        }
 
         const auctionObj = auction.toObject ? auction.toObject() : auction;
         auctionObj.playerId = auctionObj.player ? String(auctionObj.player) : undefined;

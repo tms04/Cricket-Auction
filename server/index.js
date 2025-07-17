@@ -4,6 +4,8 @@ const cors = require('cors');
 const dotenv = require('dotenv');
 const multer = require('multer');
 const path = require('path');
+const http = require('http');
+const socketIo = require('socket.io');
 
 // Load environment variables from .env file
 dotenv.config();
@@ -60,9 +62,17 @@ mongoose.connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopol
     .then(() => console.log('MongoDB connected'))
     .catch(err => console.error('MongoDB connection error:', err));
 
-// Create HTTP server
-const http = require('http');
+// Create HTTP server and Socket.io
 const server = http.createServer(app);
+const io = socketIo(server, {
+    cors: {
+        origin: '*', // Adjust for production
+        methods: ['GET', 'POST']
+    }
+});
+
+// Make io available to controllers
+app.set('io', io);
 
 server.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);

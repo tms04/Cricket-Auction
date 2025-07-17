@@ -4,6 +4,7 @@ import { useApp } from '../contexts/AppContext';
 import { Gavel, Menu, X } from 'lucide-react'; // Added Menu and X icons for mobile nav
 import Confetti from 'react-confetti';
 import * as api from '../api';
+import { io, Socket } from 'socket.io-client';
 
 interface TournamentMinimal {
     id: string;
@@ -29,6 +30,7 @@ const TournamentPage: React.FC = () => {
     const [liveAuctionPlayer, setLiveAuctionPlayer] = useState<any>(null);
     const [currentBidderTeam, setCurrentBidderTeam] = useState<string | null>(null);
     const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+    const [socket, setSocket] = useState<Socket | null>(null);
 
     // --- State for player tabs ---
     const [tabPlayers, setTabPlayers] = useState<any[]>([]);
@@ -61,43 +63,54 @@ const TournamentPage: React.FC = () => {
     }, [id, API_BASE]);
 
     useEffect(() => {
-        console.log('[Polling Effect] Running. tab:', tab);
-        let interval: any;
-        const fetchCurrentAuction = async () => {
-            console.log('[Polling] fetchCurrentAuction called');
-            try {
-                const res = await fetch(`${API_BASE}/api/auctions/current?tournamentId=${id}`);
-                const data = await res.json();
-                console.log('[Polling] Fetched live auction:', data); // Log every 2 seconds
-                // Detect status change for animation
-                if (prevAuction && prevAuction.status === 'active' && (!data || data.status !== 'active')) {
-                    if (hadBid) setShowSoldAnimation(true);
-                    else setShowUnsoldAnimation(true);
-                    setTimeout(() => {
-                        setShowSoldAnimation(false);
-                        setShowUnsoldAnimation(false);
-                    }, 2500);
-                    setHadBid(false);
-                }
-                // Track if there was at least one bid
-                if (data && data.status === 'active' && (data.currentBid > 0 || data.bidAmount > 0 || data.currentBidder)) {
-                    setHadBid(true);
-                }
-                setPrevAuction(data);
-                setLiveAuction(data);
-            } catch (err) {
-                console.error('[Polling] Error fetching live auction:', err);
-                setLiveAuction(null);
+        if (!id || tab !== 'live') return;
+        // Connect to the socket server
+        const newSocket = io(API_BASE, { transports: ['websocket'] });
+        setSocket(newSocket);
+        // Listen for auction updates for this tournament
+        const eventName = `auction_update_${id}`;
+        newSocket.on(eventName, (auctionData) => {
+            // Animation logic for SOLD/UNSOLD
+            if (
+                prevAuction &&
+                prevAuction.status === 'active' &&
+                auctionData.status !== 'active'
+            ) {
+                if (hadBid) setShowSoldAnimation(true);
+                else setShowUnsoldAnimation(true);
+                setTimeout(() => {
+                    setShowSoldAnimation(false);
+                    setShowUnsoldAnimation(false);
+                }, 2500);
+                setHadBid(false);
             }
+            // Track if there was at least one bid
+            if (
+                auctionData &&
+                auctionData.status === 'active' &&
+                (auctionData.currentBid > 0 || auctionData.bidAmount > 0 || auctionData.currentBidder)
+            ) {
+                setHadBid(true);
+            }
+            setPrevAuction(auctionData);
+            setLiveAuction(auctionData);
+        });
+        // Optionally: fetch current auction once on mount (in case no event yet)
+        fetch(`${API_BASE}/api/auctions/current?tournamentId=${id}`)
+            .then(res => res.json())
+            .then(data => {
+                setLiveAuction(data);
+                setPrevAuction(data);
+            })
+            .catch(() => {
+                setLiveAuction(null);
+                setPrevAuction(null);
+            });
+        return () => {
+            newSocket.off(eventName);
+            newSocket.disconnect();
         };
-        if (tab === 'live') {
-            fetchCurrentAuction(); // Fetch immediately on tab switch
-            interval = setInterval(fetchCurrentAuction, 2000); // Continue polling every 2 seconds
-        } else {
-            setLiveAuction(null);
-        }
-        return () => interval && clearInterval(interval);
-    }, [tab, id, prevAuction, hadBid, API_BASE]);
+    }, [id, API_BASE, tab, prevAuction, hadBid]);
 
     useEffect(() => {
         setLastUpdated(new Date());
