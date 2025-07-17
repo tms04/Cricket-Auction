@@ -14,9 +14,10 @@ const ViewerPage: React.FC = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [auctionTab, setAuctionTab] = useState<'ongoing' | 'completed'>('ongoing');
     const navigate = useNavigate();
-
+    const BASE_URL = import.meta.env.VITE_API_URL || 'https://bidkaroo.techgg.org';
+    const API_BASE = BASE_URL.endsWith('/api') ? BASE_URL : `${BASE_URL}/api`;
     useEffect(() => {
-        fetch('/api/tournaments')
+        fetch(`${API_BASE}/tournaments`)
             .then(res => res.json())
             .then((data) => {
                 // Only keep minimal fields
