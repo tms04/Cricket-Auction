@@ -157,16 +157,14 @@ const TournamentPage: React.FC = () => {
         prevLiveAuctionRef.current = liveAuction;
     }, [liveAuction]);
 
+    // Update currentBidderTeam directly from socket data
     useEffect(() => {
-        if (liveAuction?.currentBidder) {
-            fetch(`${API_BASE}/api/teams/${liveAuction.currentBidder}`)
-                .then(res => res.json())
-                .then(team => setCurrentBidderTeam(team.name))
-                .catch(() => setCurrentBidderTeam(null));
+        if (liveAuction?.currentBidderName) {
+            setCurrentBidderTeam(liveAuction.currentBidderName);
         } else {
             setCurrentBidderTeam(null);
         }
-    }, [liveAuction?.currentBidder, API_BASE]);
+    }, [liveAuction?.currentBidderName]);
 
     useEffect(() => {
         return () => {

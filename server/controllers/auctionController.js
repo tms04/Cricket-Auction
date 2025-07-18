@@ -114,6 +114,7 @@ exports.placeBid = async (req, res) => {
         // Add bid to history
         auction.bids.push({
             team: teamId,
+            teamName: team.name, // Store team name
             amount: amount,
             timestamp: new Date()
         });
@@ -121,6 +122,7 @@ exports.placeBid = async (req, res) => {
         // Update current bid
         auction.bidAmount = amount;
         auction.currentBidder = teamId; // <--- Ensure this is always set
+        auction.currentBidderName = team.name; // Store current bidder's team name
 
         await auction.save();
 
@@ -185,6 +187,7 @@ exports.completeAuction = async (req, res) => {
             // Update auction
             auction.status = 'sold';
             auction.winner = winnerId;
+            auction.winnerName = team.name; // Store winner's team name
             auction.finalAmount = saleAmount;
             auction.bidAmount = saleAmount;
         } else {
