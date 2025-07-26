@@ -46,7 +46,7 @@ const AuctioneerPlayerManager: React.FC = () => {
     }, [page]);
 
     const filteredPlayers = user?.role === 'auctioneer' && myTournament
-        ? (players || []).filter(p => p.tournamentId === myTournament.id)
+        ? (players || []).filter((p: any) => p.tournamentId === myTournament.id)
         : (players || []);
 
     const showNotification = (type: 'success' | 'error', message: string) => {
@@ -78,7 +78,7 @@ const AuctioneerPlayerManager: React.FC = () => {
             return;
         }
         try {
-            if (editingPlayer) {
+            if (editingPlayer && editingPlayer.id) {
                 await updatePlayer(editingPlayer.id, {
                     name: formData.name,
                     basePrice: formData.basePrice,
@@ -114,19 +114,29 @@ const AuctioneerPlayerManager: React.FC = () => {
                 showNotification('success', 'Player added successfully');
                 // Refetch players after adding
                 const data = await fetchPlayers(page, 50);
-                setPlayers((data.players || []).map(p => ({ ...p, id: p.id || p._id })));
+                setPlayers((data.players || []).map((p: any) => ({ ...p, id: p.id || p._id })));
                 setTotal(data.total);
             }
             resetForm();
             setShowForm(false);
         } catch (error) {
-            showNotification('error', 'Failed to save player');
+            if (!editingPlayer?.id) {
+                showNotification('error', 'Invalid player ID. Please try editing the player again.');
+            } else {
+                showNotification('error', 'Failed to save player');
+            }
         }
     };
 
     const handleEdit = async (player: Player) => {
+        // Ensure we have a valid ID
+        const playerId = player.id || (player as any)._id;
+        if (!playerId) {
+            showNotification('error', 'Invalid player ID. Cannot edit this player.');
+            return;
+        }
         // Fetch full details for this player
-        const fullPlayer = await fetchPlayerById(player.id || (player as any)._id);
+        const fullPlayer = await fetchPlayerById(playerId);
         setEditingPlayer(fullPlayer);
         setFormData({
             name: fullPlayer.name || '',
@@ -152,7 +162,7 @@ const AuctioneerPlayerManager: React.FC = () => {
                 showNotification('success', 'Player deleted successfully');
                 // Refetch players after delete
                 const data = await fetchPlayers(page, 50);
-                setPlayers((data.players || []).map(p => ({ ...p, id: p.id || p._id })));
+                setPlayers((data.players || []).map((p: any) => ({ ...p, id: p.id || p._id })));
                 setTotal(data.total);
             } catch (error: any) {
                 const errorMessage = error.response?.data?.error || error.message || 'Failed to delete player';
@@ -204,7 +214,7 @@ const AuctioneerPlayerManager: React.FC = () => {
             setShowExcelUpload(false);
             setExcelData([]);
             const data = await fetchPlayers(page, 50);
-            setPlayers((data.players || []).map(p => ({ ...p, id: p.id || p._id })));
+            setPlayers((data.players || []).map((p: any) => ({ ...p, id: p.id || p._id })));
             setTotal(data.total);
         } catch (error) {
             showNotification('error', 'Error importing players. Please check the data format.');

@@ -35,6 +35,7 @@ export interface Team {
   players: string[];
   color: string;
   logo?: string;
+  totalBudget: number;
 }
 
 export interface Player {

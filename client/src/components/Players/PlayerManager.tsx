@@ -110,7 +110,7 @@ const PlayerManager: React.FC = () => {
       return;
     }
     try {
-      if (editingPlayer) {
+      if (editingPlayer && editingPlayer.id) {
         await updatePlayer(editingPlayer.id, {
           name: formData.name,
           basePrice: formData.basePrice,
@@ -158,11 +158,20 @@ const PlayerManager: React.FC = () => {
       resetForm();
       setShowForm(false);
     } catch (error) {
-      showNotification('error', 'Failed to save player');
+      if (!editingPlayer?.id) {
+        showNotification('error', 'Invalid player ID. Please try editing the player again.');
+      } else {
+        showNotification('error', 'Failed to save player');
+      }
     }
   };
 
   const handleEdit = (player: Player) => {
+    // Ensure we have a valid ID
+    if (!player.id) {
+      showNotification('error', 'Invalid player ID. Cannot edit this player.');
+      return;
+    }
     setEditingPlayer(player);
     setFormData({
       name: player.name,

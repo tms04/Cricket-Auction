@@ -23,12 +23,19 @@ const TeamManager: React.FC = () => {
 
   useEffect(() => {
     const fetchPaginatedTeams = async () => {
-      const data = await fetchTeams(page, 20);
-      setTeams(data.teams);
+      // Fetch only teams for the current tournament
+      const data = await fetchTeams(page, 20, myTournament?.id);
+      const safeTeams = Array.isArray(data.teams) ? data.teams.map((t: any) => ({ ...t, id: t._id || t.id })) : [];
+      setTeams(safeTeams);
       setTotal(data.total);
     };
-    fetchPaginatedTeams();
-  }, [page]);
+    if (myTournament?.id) {
+      fetchPaginatedTeams();
+    } else {
+      setTeams([]);
+      setTotal(0);
+    }
+  }, [page, myTournament?.id]);
 
   const teamColors = [
     '#10B981', '#3B82F6', '#EF4444', '#F59E0B', '#8B5CF6',
@@ -78,6 +85,7 @@ const TeamManager: React.FC = () => {
           tournamentId: isAuctioneer ? myTournament!.id : '',
           budget: isAuctioneer ? myTournament!.budget : 0,
           remainingBudget: isAuctioneer ? myTournament!.budget : 0,
+          totalBudget: isAuctioneer ? myTournament!.budget : 0,
           players: []
         });
         showNotification('success', 'Team created successfully');

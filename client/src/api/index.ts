@@ -151,7 +151,12 @@ export const markPlayerUnsold = async (playerId: string) => {
 
 export const fetchPlayerById = async (id: string) => {
     const res = await axios.get(`${API_BASE}/players/${id}`);
-    return res.data;
+    // Map _id to id for consistency
+    const player = res.data;
+    return {
+        ...player,
+        id: player._id || player.id,
+    };
 };
 
 // Fetch only minimal player info for lists
