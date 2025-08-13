@@ -68,16 +68,28 @@ exports.getPlayer = async (req, res) => {
 
 exports.createPlayer = async (req, res) => {
     try {
+        console.log('Backend - Creating player with data:', req.body);
+        console.log('Backend - Photo URL received:', req.body.photo);
+
         if (req.user && req.user.role === 'auctioneer') {
             const myTournament = await getAuctioneerTournament(req.user.email);
             if (!myTournament || String(req.body.tournamentId) !== String(myTournament._id)) {
                 return res.status(403).json({ error: 'Forbidden: You can only create players for your assigned tournament.' });
             }
         }
+
+        // Ensure photo is a URL, not base64
+        if (req.body.photo && req.body.photo.startsWith('data:')) {
+            return res.status(400).json({ error: 'Base64 images are not supported. Please upload images to Cloudinary.' });
+        }
+
         const newPlayer = new Player(req.body);
         const savedPlayer = await newPlayer.save();
+        console.log('Backend - Player saved:', savedPlayer);
+        console.log('Backend - Photo URL saved:', savedPlayer.photo);
         res.status(201).json(savedPlayer);
     } catch (err) {
+        console.error('Backend - Error creating player:', err);
         res.status(400).json({ error: err.message });
     }
 };
@@ -90,6 +102,12 @@ exports.updatePlayer = async (req, res) => {
                 return res.status(403).json({ error: 'Forbidden: You can only update players for your assigned tournament.' });
             }
         }
+
+        // Ensure photo is a URL, not base64
+        if (req.body.photo && req.body.photo.startsWith('data:')) {
+            return res.status(400).json({ error: 'Base64 images are not supported. Please upload images to Cloudinary.' });
+        }
+
         const updatedPlayer = await Player.findByIdAndUpdate(req.params.id, req.body, { new: true });
         if (!updatedPlayer) return res.status(404).json({ error: 'Player not found' });
         res.json(updatedPlayer);

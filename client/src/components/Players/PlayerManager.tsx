@@ -6,6 +6,7 @@ import { Player } from '../../types';
 import * as XLSX from 'xlsx';
 import { fetchPlayers } from '../../api';
 import AuctioneerPlayerManager from './AuctioneerPlayerManager';
+import { uploadImage, getOptimizedImageUrl } from '../../utils/cloudinary';
 
 const PlayerManager: React.FC = () => {
   const { user } = useAuth();
@@ -142,6 +143,8 @@ const PlayerManager: React.FC = () => {
           tournamentId: isAuctioneer ? myTournament!.id : '',
           status: 'available'
         };
+        console.log('Creating new player with data:', newPlayer);
+        console.log('Photo URL being sent:', newPlayer.photo);
         await addPlayer(newPlayer);
         showNotification('success', 'Player added successfully');
         // Refetch players after adding
@@ -622,19 +625,22 @@ const PlayerManager: React.FC = () => {
                     const file = e.target.files?.[0];
                     if (file) {
                       setImageLoading(true);
-                      const reader = new FileReader();
-                      reader.onloadend = () => {
-                        setFormData((prev) => ({ ...prev, photo: reader.result as string }));
+                      try {
+                        const imageUrl = await uploadImage(file);
+                        setFormData((prev) => ({ ...prev, photo: imageUrl }));
+                        showNotification('success', 'Image uploaded successfully!');
+                      } catch (error) {
+                        showNotification('error', 'Failed to upload image. Please try again.');
+                      } finally {
                         setImageLoading(false);
-                      };
-                      reader.readAsDataURL(file);
+                      }
                     }
                   }}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 />
-                {imageLoading && <div className="text-sm text-blue-600">Loading image...</div>}
+                {imageLoading && <div className="text-sm text-blue-600">Uploading image to Cloudinary...</div>}
                 {formData.photo && (
-                  <img src={formData.photo} alt="Preview" className="mt-2 w-24 h-24 object-cover rounded-lg border" />
+                  <img src={getOptimizedImageUrl(formData.photo, { width: 96, height: 96, quality: 80 })} alt="Preview" className="mt-2 w-24 h-24 object-cover rounded-lg border" />
                 )}
               </div>
 
@@ -755,7 +761,7 @@ const PlayerManager: React.FC = () => {
                   <strong>Required columns:</strong> Name, Base Price, Previous Team, Station, Age, Category, Primary Role, Batting Style, Bowling Style
                 </p>
                 <p className="text-xs text-gray-500">
-                  <strong>Optional:</strong> Photo (base64 or URL)
+                  <strong>Optional:</strong> Photo (Cloudinary URL)
                 </p>
               </div>
             </div>

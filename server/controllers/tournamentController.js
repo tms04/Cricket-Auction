@@ -35,6 +35,12 @@ exports.createTournament = async (req, res) => {
         console.log('Creating tournament with data:', tournamentData);
         console.log('Categories:', tournamentData.categories);
         console.log('Auction type:', tournamentData.auctionType);
+
+        // Ensure logo is a URL, not base64
+        if (tournamentData.logo && tournamentData.logo.startsWith('data:')) {
+            return res.status(400).json({ error: 'Base64 images are not supported. Please upload images to Cloudinary.' });
+        }
+
         // Ensure maxTeams and budget are numbers
         const newTournament = new Tournament({
             auctioneerEmail, ...tournamentData,
@@ -70,6 +76,11 @@ exports.createTournament = async (req, res) => {
 
 exports.updateTournament = async (req, res) => {
     try {
+        // Ensure logo is a URL, not base64
+        if (req.body.logo && req.body.logo.startsWith('data:')) {
+            return res.status(400).json({ error: 'Base64 images are not supported. Please upload images to Cloudinary.' });
+        }
+
         const updatedTournament = await Tournament.findByIdAndUpdate(req.params.id, req.body, { new: true }).populate('teams');
         if (!updatedTournament) return res.status(404).json({ error: 'Tournament not found' });
         res.json(updatedTournament);

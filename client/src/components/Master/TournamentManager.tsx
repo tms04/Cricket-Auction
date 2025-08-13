@@ -3,6 +3,7 @@ import { Plus, Calendar, Users, DollarSign, Trophy, Edit2, Trash2, CheckCircle, 
 import { useApp } from '../../contexts/AppContext';
 import { Tournament } from '../../types';
 import { useAuth } from '../../contexts/AuthContext';
+import { uploadImage, getOptimizedImageUrl } from '../../utils/cloudinary';
 
 const TournamentManager: React.FC = () => {
   const { tournaments, addTournament, updateTournament, deleteTournament, activeTournament, setActiveTournament, isLoading } = useApp();
@@ -105,15 +106,16 @@ const TournamentManager: React.FC = () => {
     }
   };
 
-  const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleLogoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const base64 = ev.target?.result as string;
-      setFormData((prev) => ({ ...prev, logo: base64 }));
-    };
-    reader.readAsDataURL(file);
+    try {
+      const imageUrl = await uploadImage(file);
+      setFormData((prev) => ({ ...prev, logo: imageUrl }));
+      showNotification('success', 'Logo uploaded successfully!');
+    } catch (error) {
+      showNotification('error', 'Failed to upload logo');
+    }
   };
 
   const formatCurrency = (amount: number) => {
@@ -372,7 +374,7 @@ const TournamentManager: React.FC = () => {
                 <label className="block text-gray-700 font-medium mb-1">Tournament Logo</label>
                 <input type="file" accept="image/*" onChange={handleLogoChange} className="block w-full text-gray-700" />
                 {formData.logo && (
-                  <img src={formData.logo} alt="Tournament Logo" className="mt-2 w-24 h-24 object-cover rounded-lg border" />
+                  <img src={getOptimizedImageUrl(formData.logo, { width: 96, height: 96, quality: 80 })} alt="Tournament Logo" className="mt-2 w-24 h-24 object-cover rounded-lg border" />
                 )}
               </div>
               <div className="grid grid-cols-2 gap-4">

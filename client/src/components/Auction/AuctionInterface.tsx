@@ -90,6 +90,8 @@ const AuctionInterface: React.FC = () => {
       // Only call the API if playerId is a valid ObjectId
       if (isValidObjectId(playerId)) {
         api.fetchPlayerById(playerId).then(player => {
+          console.log('AuctionInterface - Fetched player data:', player);
+          console.log('AuctionInterface - Player photo URL:', player?.photo);
           setCurrentPlayer(player || null);
         });
       } else {

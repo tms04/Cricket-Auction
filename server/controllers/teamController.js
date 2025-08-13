@@ -50,6 +50,12 @@ exports.createTeam = async (req, res) => {
                 return res.status(403).json({ error: 'Forbidden: You can only create teams for your assigned tournament.' });
             }
         }
+        
+        // Ensure logo is a URL, not base64
+        if (req.body.logo && req.body.logo.startsWith('data:')) {
+            return res.status(400).json({ error: 'Base64 images are not supported. Please upload images to Cloudinary.' });
+        }
+        
         const newTeam = new Team(req.body);
         const savedTeam = await newTeam.save();
         const teams = await Team.find().populate('players');
@@ -67,6 +73,12 @@ exports.updateTeam = async (req, res) => {
                 return res.status(403).json({ error: 'Forbidden: You can only update teams for your assigned tournament.' });
             }
         }
+        
+        // Ensure logo is a URL, not base64
+        if (req.body.logo && req.body.logo.startsWith('data:')) {
+            return res.status(400).json({ error: 'Base64 images are not supported. Please upload images to Cloudinary.' });
+        }
+        
         const updatedTeam = await Team.findByIdAndUpdate(req.params.id, req.body, { new: true }).populate('players');
         if (!updatedTeam) return res.status(404).json({ error: 'Team not found' });
         res.json(updatedTeam);

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import * as api from '../api';
+import { uploadImage, getOptimizedImageUrl } from '../utils/cloudinary';
 
 const ProfilePage: React.FC = () => {
     const { user } = useAuth();
@@ -14,15 +15,15 @@ const ProfilePage: React.FC = () => {
         setPreview(user?.profilePicture || '');
     }, [user]);
 
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
-        const reader = new FileReader();
-        reader.onload = (ev) => {
-            const base64 = ev.target?.result as string;
-            setPreview(base64);
-        };
-        reader.readAsDataURL(file);
+        try {
+            const imageUrl = await uploadImage(file);
+            setPreview(imageUrl);
+        } catch (error) {
+            setMessage('Failed to upload image.');
+        }
     };
 
     const handleUpdate = async () => {
@@ -47,7 +48,7 @@ const ProfilePage: React.FC = () => {
                 <div className="flex flex-col items-center mb-6">
                     <div className="w-32 h-32 rounded-full overflow-hidden border-4 border-blue-400 mb-2">
                         {preview ? (
-                            <img src={preview} alt="Profile" className="w-full h-full object-cover" />
+                            <img src={getOptimizedImageUrl(preview, { width: 128, height: 128, quality: 80 })} alt="Profile" className="w-full h-full object-cover" />
                         ) : (
                             <div className="w-full h-full flex items-center justify-center bg-gray-200 text-gray-700">No Image</div>
                         )}

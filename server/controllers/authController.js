@@ -76,10 +76,12 @@ exports.getMe = async (req, res) => {
 exports.updateProfile = async (req, res) => {
     try {
         const { photo } = req.body;
-        // Limit base64 string size (e.g., 100KB)
-        if (photo && Buffer.byteLength(photo, 'base64') > 100 * 1024) {
-            return res.status(400).json({ error: 'Profile picture is too large. Please compress the image.' });
+        
+        // Ensure photo is a URL, not base64
+        if (photo && photo.startsWith('data:')) {
+            return res.status(400).json({ error: 'Base64 images are not supported. Please upload images to Cloudinary.' });
         }
+        
         const user = await User.findByIdAndUpdate(
             req.user.userId,
             { photo },

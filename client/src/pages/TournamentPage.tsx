@@ -126,8 +126,11 @@ const TournamentPage: React.FC = () => {
         console.log('Extracted playerId:', playerId);
         if (typeof playerId === 'string' && playerId && playerId !== '[object Object]') {
             api.fetchPlayerById(playerId).then(player => {
+                console.log('Fetched player data:', player);
+                console.log('Player photo URL:', player?.photo);
                 setLiveAuctionPlayer(player);
             }).catch(err => {
+                console.error('Error fetching player:', err);
                 setLiveAuctionPlayer(null);
             });
         } else {

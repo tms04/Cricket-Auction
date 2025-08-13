@@ -2,20 +2,26 @@ const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const dotenv = require('dotenv');
-const multer = require('multer');
 const path = require('path');
 const http = require('http');
 const socketIo = require('socket.io');
+const cloudinary = require('cloudinary').v2;
 
 // Load environment variables from .env file
 dotenv.config();
+
+// Cloudinary configuration
+cloudinary.config({
+    cloud_name: 'dviulhflk',
+    api_key: '899555547873116',
+    api_secret: 'zY61vhsE09h1UHtWw5m6Y6O532o'
+});
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
 // Middleware
 app.use(cors());
-// app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
 app.use(express.json({ limit: '10mb' })); // or higher if needed
@@ -27,31 +33,6 @@ app.use('/api/teams', require('./routes/teamRoutes'));
 app.use('/api/tournaments', require('./routes/tournamentRoutes'));
 app.use('/api/auctions', require('./routes/auctionRoutes'));
 app.use('/api/auth', require('./routes/authRoutes'));
-
-// Multer setup for file uploads
-const storage = multer.diskStorage({
-    destination: function (req, file, cb) {
-        cb(null, path.join(__dirname, 'uploads'));
-    },
-    filename: function (req, file, cb) {
-        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        cb(null, uniqueSuffix + '-' + file.originalname);
-    }
-});
-const upload = multer({ storage });
-
-// Serve uploads folder statically
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-
-// Upload endpoint
-app.post('/api/upload', upload.single('file'), (req, res) => {
-    if (!req.file) {
-        return res.status(400).json({ error: 'No file uploaded' });
-    }
-    // Return the URL to access the uploaded file
-    const fileUrl = `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`;
-    res.json({ url: fileUrl });
-});
 
 // Basic route
 app.get('/', (req, res) => {

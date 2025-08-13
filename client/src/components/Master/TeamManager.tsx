@@ -4,6 +4,7 @@ import { useApp } from '../../contexts/AppContext';
 import { Team } from '../../types';
 import { useAuth } from '../../contexts/AuthContext';
 import { fetchTeams } from '../../api';
+import { uploadImage, getOptimizedImageUrl } from '../../utils/cloudinary';
 
 const TeamManager: React.FC = () => {
   const { teams: contextTeams, addTeam, updateTeam, deleteTeam, players, myTournament, tournaments } = useApp();
@@ -98,15 +99,16 @@ const TeamManager: React.FC = () => {
     }
   };
 
-  const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleLogoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const base64 = ev.target?.result as string;
-      setFormData((prev) => ({ ...prev, logo: base64 }));
-    };
-    reader.readAsDataURL(file);
+    try {
+      const imageUrl = await uploadImage(file);
+      setFormData((prev) => ({ ...prev, logo: imageUrl }));
+      showNotification('success', 'Logo uploaded successfully!');
+    } catch (error) {
+      showNotification('error', 'Failed to upload logo');
+    }
   };
 
   const handleEdit = (team: Team) => {
@@ -391,7 +393,7 @@ const TeamManager: React.FC = () => {
                   <label className="block text-gray-700 font-medium mb-1">Team Logo</label>
                   <input type="file" accept="image/*" onChange={handleLogoChange} className="block w-full text-gray-700" />
                   {formData.logo && (
-                    <img src={formData.logo} alt="Team Logo" className="mt-2 w-24 h-24 object-cover rounded-lg border" />
+                    <img src={getOptimizedImageUrl(formData.logo, { width: 96, height: 96, quality: 80 })} alt="Team Logo" className="mt-2 w-24 h-24 object-cover rounded-lg border" />
                   )}
                 </div>
               </form>

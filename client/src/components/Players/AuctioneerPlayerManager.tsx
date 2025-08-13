@@ -5,6 +5,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { Player } from '../../types';
 import { fetchPlayers, fetchPlayerById } from '../../api';
 import * as XLSX from 'xlsx';
+import { uploadImage, getOptimizedImageUrl } from '../../utils/cloudinary';
 
 const AuctioneerPlayerManager: React.FC = () => {
     const { players: contextPlayers, addPlayer, updatePlayer, deletePlayer, myTournament } = useApp();
@@ -464,17 +465,19 @@ const AuctioneerPlayerManager: React.FC = () => {
                                         onChange={async (e) => {
                                             const file = e.target.files?.[0];
                                             if (file) {
-                                                const reader = new FileReader();
-                                                reader.onloadend = () => {
-                                                    setFormData((prev) => ({ ...prev, photo: reader.result as string }));
-                                                };
-                                                reader.readAsDataURL(file);
+                                                try {
+                                                    const imageUrl = await uploadImage(file);
+                                                    setFormData((prev) => ({ ...prev, photo: imageUrl }));
+                                                    showNotification('success', 'Image uploaded successfully!');
+                                                } catch (error) {
+                                                    showNotification('error', 'Failed to upload image. Please try again.');
+                                                }
                                             }
                                         }}
                                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
                                     />
                                     {formData.photo && (
-                                        <img src={formData.photo} alt="Preview" className="mt-2 w-24 h-24 object-cover rounded-lg border" />
+                                        <img src={getOptimizedImageUrl(formData.photo, { width: 96, height: 96, quality: 80 })} alt="Preview" className="mt-2 w-24 h-24 object-cover rounded-lg border" />
                                     )}
                                 </div>
                             </div>
@@ -516,7 +519,7 @@ const AuctioneerPlayerManager: React.FC = () => {
                                     <strong>Required columns:</strong> Name, Base Price, Previous Team, Station, Age, Category, Primary Role, Batting Style, Bowling Style
                                 </p>
                                 <p className="text-xs text-gray-500">
-                                    <strong>Optional:</strong> Photo (base64 or URL)
+                                    <strong>Optional:</strong> Photo (Cloudinary URL)
                                 </p>
                             </div>
                         </div>

@@ -170,7 +170,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const addPlayer = async (player: Omit<Player, 'id'>) => {
+    console.log('AppContext - Creating player with data:', player);
+    console.log('AppContext - Photo URL being sent:', player.photo);
     const newPlayer = await api.createPlayer(player);
+    console.log('AppContext - Player created, response:', newPlayer);
+    console.log('AppContext - Photo URL in response:', newPlayer.photo);
     // Refetch the full list to ensure state is in sync with backend
     const playersData = await fetchPlayersApi(1, 50, myTournament?.id);
     const safePlayers = Array.isArray(playersData?.players) ? playersData.players : [];
