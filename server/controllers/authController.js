@@ -4,19 +4,25 @@ const jwt = require('jsonwebtoken');
 
 // Seed master account if not present
 async function seedMaster() {
-    const master = await User.findOne({ role: 'master' });
-    if (!master) {
-        const hashedPassword = await bcrypt.hash('master@2025', 10);
-        await User.create({
-            username: 'master',
-            email: 'master@auction.com',
-            password: hashedPassword,
-            role: 'master',
-        });
-        console.log('Master account seeded');
+    try {
+        const master = await User.findOne({ role: 'master' });
+        if (!master) {
+            const hashedPassword = await bcrypt.hash('master@2025', 10);
+            await User.create({
+                username: 'master',
+                email: 'master@auction.com',
+                password: hashedPassword,
+                role: 'master',
+            });
+            console.log('Master account seeded');
+        }
+    } catch (error) {
+        console.error('Error seeding master account:', error);
     }
 }
-seedMaster();
+
+// Export seedMaster function to be called after DB connection
+module.exports.seedMaster = seedMaster;
 
 exports.register = async (req, res) => {
     try {
@@ -76,12 +82,12 @@ exports.getMe = async (req, res) => {
 exports.updateProfile = async (req, res) => {
     try {
         const { photo } = req.body;
-        
+
         // Ensure photo is a URL, not base64
         if (photo && photo.startsWith('data:')) {
             return res.status(400).json({ error: 'Base64 images are not supported. Please upload images to Cloudinary.' });
         }
-        
+
         const user = await User.findByIdAndUpdate(
             req.user.userId,
             { photo },
