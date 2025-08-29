@@ -422,11 +422,11 @@ const TournamentPage: React.FC = () => {
                                                         <img
                                                             src={liveAuctionPlayer.photo}
                                                             alt={liveAuctionPlayer.name}
-                                                            className="rounded-full object-cover w-20 h-20 sm:w-24 sm:h-24 md:w-32 md:h-32 lg:w-40 lg:h-40 max-w-[40vw] max-h-[40vw] border-4 border-yellow-300 shadow-xl"
-                                                            style={{ background: 'none', boxShadow: 'none' }}
+                                                            className="object-contain max-w-[80vw] max-h-[45vh] w-auto border-4 border-yellow-300 shadow-xl rounded-xl"
+                                                            style={{ background: 'transparent' }}
                                                         />
                                                     ) : (
-                                                        <div className="rounded-full flex items-center justify-center w-20 h-20 sm:w-24 sm:h-24 md:w-32 md:h-32 lg:w-40 lg:h-40 max-w-[40vw] max-h-[40vw] bg-yellow-400 text-4xl sm:text-5xl font-extrabold text-gray-400 border-4 border-yellow-300 shadow-xl">
+                                                        <div className="flex items-center justify-center max-w-[80vw] max-h-[45vh] w-[32vw] h-[40vh] sm:w-[28vw] sm:h-[38vh] md:w-[24vw] md:h-[36vh] bg-yellow-100 text-5xl sm:text-6xl font-extrabold text-yellow-700 border-4 border-yellow-300 shadow-xl rounded-xl">
                                                             {liveAuctionPlayer?.name?.[0] || '?'}
                                                         </div>
                                                     )}
