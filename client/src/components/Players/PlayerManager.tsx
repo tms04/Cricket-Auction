@@ -1,19 +1,31 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Search, Filter, User, Award, Flag, DollarSign, Edit2, Trash2, CheckCircle, XCircle, MapPin, Camera, Upload, Download } from 'lucide-react';
+import { Plus, Search, Filter, User, Edit2, Trash2, CheckCircle, XCircle, Upload, Download } from 'lucide-react';
 import { useApp } from '../../contexts/AppContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { Player } from '../../types';
 import * as XLSX from 'xlsx';
-import { fetchPlayers } from '../../api';
+import { fetchPlayers, checkDuplicatePlayerName } from '../../api';
 import AuctioneerPlayerManager from './AuctioneerPlayerManager';
 import { uploadImage, getOptimizedImageUrl } from '../../utils/cloudinary';
+import { useDuplicatePlayerPrompt } from '../../hooks/useDuplicatePlayerPrompt';
 
-const PlayerManager: React.FC = () => {
+type PlayerFormPayload = Omit<Player, 'id'> & { playerId?: string };
+type ExcelRow = Record<string, string | number | undefined>;
+
+const readStringCell = (value: string | number | undefined): string => {
+  if (typeof value === 'number') return value.toString();
+  return value ?? '';
+};
+
+const readNumberCell = (value: string | number | undefined): number => {
+  if (typeof value === 'number') return value;
+  const parsed = parseInt(value ?? '0', 10);
+  return Number.isNaN(parsed) ? 0 : parsed;
+};
+
+const PlayerManagerContent: React.FC = () => {
   const { user } = useAuth();
-  if (user && user.role === 'auctioneer') {
-    return <AuctioneerPlayerManager />;
-  }
-  const { players: contextPlayers, addPlayer, updatePlayer, deletePlayer, myTournament, tournaments } = useApp();
+  const { players: contextPlayers, addPlayer, updatePlayer, deletePlayer, myTournament } = useApp();
   const [players, setPlayers] = useState<Player[]>(contextPlayers || []);
   const [showForm, setShowForm] = useState(false);
   const [editingPlayer, setEditingPlayer] = useState<Player | null>(null);
@@ -37,21 +49,29 @@ const PlayerManager: React.FC = () => {
   });
   const [imageLoading, setImageLoading] = useState(false);
   const [showExcelUpload, setShowExcelUpload] = useState(false);
-  const [excelData, setExcelData] = useState<any[]>([]);
+  const [excelData, setExcelData] = useState<ExcelRow[]>([]);
   const [uploading, setUploading] = useState(false);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
+  const { requestDecision: requestDuplicateDecision, prompt: duplicatePrompt } = useDuplicatePlayerPrompt();
 
   const isAuctioneer = user?.role === 'auctioneer';
 
+  const reloadPlayers = React.useCallback(async () => {
+    if (isAuctioneer && !myTournament?.id) {
+      setPlayers([]);
+      setTotal(0);
+      return;
+    }
+    const tournamentScopeId = isAuctioneer ? myTournament?.id : undefined;
+    const data = await fetchPlayers(page, 50, tournamentScopeId);
+    setPlayers(data.players || []);
+    setTotal(data.total);
+  }, [isAuctioneer, myTournament?.id, page]);
+
   useEffect(() => {
-    const fetchPaginatedPlayers = async () => {
-      const data = await fetchPlayers(page, 50);
-      setPlayers(data.players || []);
-      setTotal(data.total);
-    };
-    fetchPaginatedPlayers();
-  }, [page]);
+    reloadPlayers();
+  }, [reloadPlayers]);
 
   // Show only players for the current tournament if auctioneer
   const filteredPlayers = user?.role === 'auctioneer' && myTournament
@@ -68,8 +88,9 @@ const PlayerManager: React.FC = () => {
 
   const categoriesToUse = myTournament?.categories || testCategories;
 
-  const showNotification = (type: 'success' | 'error', message: string) => {
-    setNotification({ type, message });
+  const showNotification = (type: 'success' | 'error' | 'info', message: string) => {
+    const displayType = type === 'info' ? 'error' : type;
+    setNotification({ type: displayType, message });
     setTimeout(() => setNotification(null), 3000);
   };
 
@@ -100,6 +121,28 @@ const PlayerManager: React.FC = () => {
     return role;
   };
 
+  const normalizeNameValue = (value: string) => value.trim().toLowerCase().replace(/\s+/g, ' ');
+  const findDuplicatePlayerByName = React.useCallback(
+    async (name: string, localPool: Player[] = players) => {
+      if (!name) return null;
+      const normalizedIncoming = normalizeNameValue(name);
+      const localMatch = (localPool || []).find(
+        (p) => normalizeNameValue(p.name) === normalizedIncoming
+      );
+      if (localMatch) {
+        return localMatch;
+      }
+      try {
+        const matches = await checkDuplicatePlayerName(name);
+        return matches.find((p) => normalizeNameValue(p.name) === normalizedIncoming) || null;
+      } catch (err) {
+        console.error('Failed to search duplicate players', err);
+        return null;
+      }
+    },
+    [players]
+  );
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (imageLoading) {
@@ -128,7 +171,7 @@ const PlayerManager: React.FC = () => {
         });
         showNotification('success', 'Player updated successfully');
       } else {
-        const newPlayer = {
+        const newPlayer: PlayerFormPayload = {
           name: formData.name,
           basePrice: formData.basePrice,
           isSold: formData.isSold,
@@ -145,27 +188,27 @@ const PlayerManager: React.FC = () => {
         };
         console.log('Creating new player with data:', newPlayer);
         console.log('Photo URL being sent:', newPlayer.photo);
-        await addPlayer(newPlayer);
+        const payload: PlayerFormPayload = { ...newPlayer };
+        const duplicate = await findDuplicatePlayerByName(newPlayer.name);
+        if (duplicate) {
+          const decision = await requestDuplicateDecision(duplicate, newPlayer, 'manual');
+          if (decision === 'cancel') {
+            showNotification('info', 'Player creation cancelled');
+            return;
+          }
+          if (decision === 'existing') {
+            payload.playerId = duplicate.playerId || duplicate.id;
+          }
+        }
+        await addPlayer(payload);
         showNotification('success', 'Player added successfully');
         // Refetch players after adding
-        if (user?.role === 'auctioneer' && myTournament) {
-          const data = await fetchPlayers(page, 50);
-          setPlayers(data.players || []);
-          setTotal(data.total);
-        } else {
-          const data = await fetchPlayers(page, 50);
-          setPlayers(data.players || []);
-          setTotal(data.total);
-        }
+        await reloadPlayers();
       }
       resetForm();
       setShowForm(false);
-    } catch (error) {
-      if (!editingPlayer?.id) {
-        showNotification('error', 'Invalid player ID. Please try editing the player again.');
-      } else {
-        showNotification('error', 'Failed to save player');
-      }
+    } catch {
+      showNotification('error', 'Failed to save player');
     }
   };
 
@@ -195,11 +238,14 @@ const PlayerManager: React.FC = () => {
   const handleDelete = async (player: Player) => {
     if (window.confirm(`Are you sure you want to delete "${player.name}"?`)) {
       try {
-        await deletePlayer(player.id);
+        const tournamentScopeId = user?.role === 'auctioneer'
+          ? myTournament?.id
+          : player.tournamentId;
+        await deletePlayer(player.id, tournamentScopeId);
         showNotification('success', 'Player deleted successfully');
         // Refetch players after delete
         if (user?.role === 'auctioneer' && myTournament) {
-          const data = await fetchPlayers(page, 50);
+          const data = await fetchPlayers(page, 50, myTournament.id);
           setPlayers(data.players || []);
           setTotal(data.total);
         } else {
@@ -207,53 +253,9 @@ const PlayerManager: React.FC = () => {
           setPlayers(data.players || []);
           setTotal(data.total);
         }
-      } catch (error: any) {
-        const errorMessage = error.response?.data?.error || error.message || 'Failed to delete player';
-        showNotification('error', errorMessage);
+      } catch {
+        showNotification('error', 'Failed to delete player');
       }
-    }
-  };
-
-  const formatCurrency = (amount: number) => {
-    if (amount === 0) return '₹0';
-    if (amount >= 10000000) {
-      return `₹${(amount / 10000000).toFixed(1)}Cr`;
-    } else if (amount >= 100000) {
-      return `₹${(amount / 100000).toFixed(1)}L`;
-    }
-    return new Intl.NumberFormat('en-IN', {
-      style: 'currency',
-      currency: 'INR',
-      maximumFractionDigits: 0
-    }).format(amount);
-  };
-
-  const getRoleColor = (role: string) => {
-    switch (role) {
-      case 'batsman': return 'bg-blue-100 text-blue-800';
-      case 'bowler': return 'bg-red-100 text-red-800';
-      case 'all-rounder': return 'bg-green-100 text-green-800';
-      case 'wicket-keeper': return 'bg-purple-100 text-purple-800';
-      default: return 'bg-gray-100 text-gray-800';
-    }
-  };
-
-  const getCategoryColor = (category: string) => {
-    switch (category) {
-      case 'A+': return 'bg-yellow-100 text-yellow-800';
-      case 'A': return 'bg-orange-100 text-orange-800';
-      case 'B': return 'bg-indigo-100 text-indigo-800';
-      case 'C': return 'bg-gray-100 text-gray-800';
-      default: return 'bg-gray-100 text-gray-800';
-    }
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'available': return 'bg-green-100 text-green-800';
-      case 'sold': return 'bg-blue-100 text-blue-800';
-      case 'unsold': return 'bg-red-100 text-red-800';
-      default: return 'bg-gray-100 text-gray-800';
     }
   };
 
@@ -271,9 +273,9 @@ const PlayerManager: React.FC = () => {
         const worksheet = workbook.Sheets[sheetName];
         const data = XLSX.utils.sheet_to_json(worksheet);
 
-        setExcelData(data);
+        setExcelData(data as ExcelRow[]);
         setShowExcelUpload(true);
-      } catch (error) {
+      } catch {
         showNotification('error', 'Error reading Excel file. Please check the format.');
       }
     };
@@ -285,29 +287,48 @@ const PlayerManager: React.FC = () => {
 
     setUploading(true);
     try {
-      const processedPlayers = excelData.map((row: any) => ({
-        name: row.Name || row.name || '',
-        basePrice: parseInt(row['Base Price'] || row.basePrice || row['BasePrice'] || '0') || 0,
-        previousYearTeam: row['Previous Team'] || row.previousTeam || row['PreviousTeam'] || '',
-        station: row.Station || row.station || '',
-        age: parseInt(row.Age || row.age || '0') || 0,
-        category: row.Category || row.category || '',
-        primaryRole: row.PrimaryRole || row.primaryRole || '',
-        battingStyle: row.BattingStyle || row.battingStyle || '',
-        bowlingStyle: row.BowlingStyle || row.bowlingStyle || '',
+      const processedPlayers: PlayerFormPayload[] = excelData.map((row: ExcelRow) => ({
+        name: readStringCell(row.Name ?? row.name ?? ''),
+        basePrice: readNumberCell(row['Base Price'] ?? row.basePrice ?? row.BasePrice),
+        previousYearTeam: readStringCell(row['Previous Team'] ?? row.previousTeam ?? row.PreviousTeam ?? ''),
+        station: readStringCell(row.Station ?? row.station ?? ''),
+        age: readNumberCell(row.Age ?? row.age),
+        category: readStringCell(row.Category ?? row.category ?? ''),
+        primaryRole: readStringCell(row.PrimaryRole ?? row.primaryRole ?? ''),
+        battingStyle: readStringCell(row.BattingStyle ?? row.battingStyle ?? ''),
+        bowlingStyle: readStringCell(row.BowlingStyle ?? row.bowlingStyle ?? ''),
         tournamentId: isAuctioneer ? myTournament!.id : '',
         status: 'available'
       })).filter(player => player.name.trim() !== '');
 
-      // Add players one by one
+      let workingPlayers = [...players];
+
+      // Add players one by one with duplicate detection
       for (const player of processedPlayers) {
-        await addPlayer(player);
+        const payload: PlayerFormPayload = { ...player };
+        const localDuplicate = workingPlayers.find(p => normalizeNameValue(p.name) === normalizeNameValue(player.name));
+        const duplicate = localDuplicate || await findDuplicatePlayerByName(player.name, workingPlayers);
+        if (duplicate) {
+          const decision = await requestDuplicateDecision(duplicate, player, 'excel');
+          if (decision === 'cancel') {
+            showNotification('info', 'Excel import cancelled');
+            setUploading(false);
+            return;
+          }
+          if (decision === 'existing') {
+            payload.playerId = duplicate.playerId || duplicate.id;
+          }
+        }
+        const created = await addPlayer(payload);
+        if (created) {
+          workingPlayers = [...workingPlayers, created];
+        }
       }
 
       showNotification('success', `Successfully imported ${processedPlayers.length} players`);
       setShowExcelUpload(false);
       setExcelData([]);
-    } catch (error) {
+    } catch {
       showNotification('error', 'Error importing players. Please check the data format.');
     } finally {
       setUploading(false);
@@ -360,6 +381,7 @@ const PlayerManager: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      {duplicatePrompt}
       {/* Notification */}
       {notification && (
         <div className={`fixed top-4 right-4 z-50 p-4 rounded-lg shadow-lg flex items-center space-x-2 ${notification.type === 'success' ? 'bg-green-500 text-white' : 'bg-red-500 text-white'
@@ -629,7 +651,7 @@ const PlayerManager: React.FC = () => {
                         const imageUrl = await uploadImage(file);
                         setFormData((prev) => ({ ...prev, photo: imageUrl }));
                         showNotification('success', 'Image uploaded successfully!');
-                      } catch (error) {
+                      } catch {
                         showNotification('error', 'Failed to upload image. Please try again.');
                       } finally {
                         setImageLoading(false);
@@ -782,7 +804,7 @@ const PlayerManager: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {(excelData || []).slice(0, 10).map((row: any, index: number) => (
+                  {(excelData || []).slice(0, 10).map((row, index: number) => (
                     <tr key={index} className="hover:bg-gray-50">
                       <td className="border px-3 py-2 text-sm">{row.Name || row.name || '-'}</td>
                       <td className="border px-3 py-2 text-sm">{row['Base Price'] || row.basePrice || row['BasePrice'] || '-'}</td>
@@ -830,6 +852,14 @@ const PlayerManager: React.FC = () => {
       )}
     </div>
   );
+};
+
+const PlayerManager: React.FC = () => {
+  const { user } = useAuth();
+  if (user?.role === 'auctioneer') {
+    return <AuctioneerPlayerManager />;
+  }
+  return <PlayerManagerContent />;
 };
 
 export default PlayerManager;

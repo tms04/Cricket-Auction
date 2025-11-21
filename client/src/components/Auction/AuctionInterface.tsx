@@ -1,9 +1,27 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Gavel, User, DollarSign, Trophy, Shuffle, CheckCircle, XCircle, AlertCircle, Clock, Eye, MapPin, Camera, Target, Trash2 } from 'lucide-react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { Gavel, User, Trophy, Shuffle, CheckCircle, XCircle, AlertCircle, MapPin, Target, Trash2 } from 'lucide-react';
 import { useApp } from '../../contexts/AppContext';
 import { useAuth } from '../../contexts/AuthContext';
-import { Player } from '../../types';
+import { Player, Team } from '../../types';
 import * as api from '../../api';
+
+const currencyFormatter = new Intl.NumberFormat('en-IN', {
+  style: 'currency',
+  currency: 'INR',
+  maximumFractionDigits: 0
+});
+
+const formatCurrency = (amount: number) => currencyFormatter.format(amount);
+
+type SoldPlayersByTeam = Record<string, Player[]>;
+const toNumber = (value?: number | string | null) => {
+  if (typeof value === 'number') return value;
+  if (typeof value === 'string') {
+    const parsed = Number(value);
+    return Number.isNaN(parsed) ? 0 : parsed;
+  }
+  return 0;
+};
 
 const AuctionInterface: React.FC = () => {
   const {
@@ -14,9 +32,7 @@ const AuctionInterface: React.FC = () => {
     startAuction,
     placeBid,
     completeAuction,
-    resetPlayerStatuses,
-    updatePlayer,
-    fetchAuctions // Use fetchAuctions to refresh auctions
+    resetPlayerStatuses
   } = useApp();
   const { user } = useAuth();
 
@@ -29,8 +45,8 @@ const AuctionInterface: React.FC = () => {
   const [notification, setNotification] = useState<{ type: 'success' | 'error' | 'info', message: string } | null>(null);
   const [showPlayerSelection, setShowPlayerSelection] = useState(false);
   const [lastSelectedPlayerId, setLastSelectedPlayerId] = useState<string | null>(null);
-  const [expandedTeamId, setExpandedTeamId] = useState<string | null>(null);
   const prevAuctionId = useRef<string | null>(null);
+  const basePriceRef = useRef(0);
 
   // Find the active auction for the current tournament
   const activeAuction = auctions.find(
@@ -40,83 +56,81 @@ const AuctionInterface: React.FC = () => {
   ) || auctions.find(
     a => a.status === 'active' && a.tournamentId === myTournament?.id
   );
-  const tournamentTeams = teams.filter(t => t.tournamentId === myTournament?.id);
-  const availablePlayers = players.filter(p =>
-    (p.status === 'available' || p.status === 'unsold') && p.tournamentId === myTournament?.id
+  const tournamentTeams = useMemo(
+    () => teams.filter(t => t.tournamentId === myTournament?.id),
+    [teams, myTournament?.id]
+  );
+  const availablePlayers = useMemo(
+    () => players.filter(p =>
+      (p.status === 'available' || p.status === 'unsold') && p.tournamentId === myTournament?.id
+    ),
+    [players, myTournament?.id]
   );
 
   // Show notification helper
-  const showNotification = (type: 'success' | 'error' | 'info', message: string) => {
+  const showNotification = useCallback((type: 'success' | 'error' | 'info', message: string) => {
     setNotification({ type, message });
     setTimeout(() => setNotification(null), 3000);
-  };
+  }, []);
 
   // Function to cancel the current auction and prompt reselection
-  const cancelCurrentAuction = async () => {
+  const cancelCurrentAuction = useCallback(async () => {
     if (activeAuction) {
-      await completeAuction(activeAuction.id); // Mark as unsold
+      await completeAuction(activeAuction.id);
       showNotification('info', 'Previous auction could not be restored and was canceled. Please select the player again.');
-      setShowPlayerSelection(true); // Show the player selection modal
+      setShowPlayerSelection(true);
     }
-  };
+  }, [activeAuction, completeAuction, showNotification]);
 
   // Utility function to validate MongoDB ObjectId
-  function isValidObjectId(id: string) {
-    return typeof id === 'string' && /^[a-f\d]{24}$/i.test(id);
-  }
+  const isValidObjectId = (id: string) => typeof id === 'string' && /^[a-f\d]{24}$/i.test(id);
 
   useEffect(() => {
-    if (activeAuction) {
-      const auctionId = String(activeAuction.id);
-      // Directly extract playerId as a string from activeAuction
-      let playerId = '';
-      if (activeAuction.playerId && typeof activeAuction.playerId === 'object') {
-        playerId = (activeAuction.playerId as any)._id || (activeAuction.playerId as any).id || '';
-        if (!playerId) {
-          const values = Object.values(activeAuction.playerId);
-          playerId = values.find(v => typeof v === 'string') || '';
-        }
-      } else if (typeof activeAuction.playerId === 'string') {
-        playerId = activeAuction.playerId;
-      } else if ((activeAuction as any).player && typeof (activeAuction as any).player === 'object') {
-        playerId = (activeAuction as any).player._id || (activeAuction as any).player.id || '';
-        if (!playerId) {
-          const values = Object.values((activeAuction as any).player);
-          playerId = values.find(v => typeof v === 'string') || '';
-        }
-      } else if (typeof (activeAuction as any).player === 'string') {
-        playerId = (activeAuction as any).player;
-      }
-      // Only call the API if playerId is a valid ObjectId
-      if (isValidObjectId(playerId)) {
-        api.fetchPlayerById(playerId).then(player => {
-          console.log('AuctionInterface - Fetched player data:', player);
-          console.log('AuctionInterface - Player photo URL:', player?.photo);
-          setCurrentPlayer(player || null);
-        });
-      } else {
-        cancelCurrentAuction();
-        setCurrentPlayer(null);
-      }
-      setCurrentBid(activeAuction.currentBid || 0);
-      setCurrentBidder(activeAuction.currentBidder || null);
-      setAuctionStatus('active');
-      // Only set bidAmount if auction changed
-      if (auctionId !== prevAuctionId.current) {
-        const initialBid = Math.max(
-          currentPlayer?.basePrice ?? 0,
-          activeAuction?.currentBid ?? 0
-        );
-        setBidAmount(initialBid.toString());
-        prevAuctionId.current = auctionId;
-      }
-    } else {
+    if (!activeAuction) {
       setAuctionStatus('idle');
       setCurrentPlayer(null);
       setBidAmount('');
       prevAuctionId.current = null;
+      return;
     }
-  }, [activeAuction, players]);
+
+    const auctionId = String(activeAuction.id);
+    const playerId = activeAuction.playerId;
+    if (!playerId || !isValidObjectId(playerId)) {
+      cancelCurrentAuction();
+      setCurrentPlayer(null);
+      return;
+    }
+
+    const contextualPlayer = players.find(p => p.id === playerId);
+    let effectiveBasePrice = basePriceRef.current;
+    if (contextualPlayer) {
+      effectiveBasePrice = contextualPlayer.basePrice ?? basePriceRef.current;
+      basePriceRef.current = effectiveBasePrice;
+      setCurrentPlayer(contextualPlayer);
+    } else {
+      api.fetchPlayerById(playerId, myTournament?.id)
+        .then(player => {
+          if (player) {
+            const playerBase = player.basePrice ?? basePriceRef.current;
+            basePriceRef.current = playerBase;
+            setCurrentPlayer(player);
+          } else {
+            setCurrentPlayer(null);
+          }
+        })
+        .catch(() => cancelCurrentAuction());
+    }
+
+    setCurrentBid(activeAuction.currentBid || 0);
+    setCurrentBidder(activeAuction.currentBidder || null);
+    setAuctionStatus('active');
+    if (auctionId !== prevAuctionId.current) {
+      const initialBid = Math.max(effectiveBasePrice, activeAuction.currentBid || 0);
+      setBidAmount(initialBid.toString());
+      prevAuctionId.current = auctionId;
+    }
+  }, [activeAuction, players, cancelCurrentAuction, myTournament?.id]);
 
   const getRandomPlayer = () => {
     if (availablePlayers.length === 0) return null;
@@ -154,54 +168,6 @@ const AuctionInterface: React.FC = () => {
     }
   };
 
-  const handleBid = async (teamId: string, amount: number) => {
-    if (!activeAuction) return;
-    try {
-      // Call placeBid and then find the updated auction in context
-      const success = await placeBid(activeAuction.id, teamId, amount);
-      if (success) {
-        // Find the updated auction in context
-        const updatedAuction = auctions.find(a => a.id === activeAuction.id);
-        if (updatedAuction) {
-          setCurrentBid(updatedAuction.bidAmount || amount);
-          setCurrentBidder(updatedAuction.currentBidder || teamId);
-        } else {
-          setCurrentBid(amount);
-          setCurrentBidder(teamId);
-        }
-        showNotification('success', `Bid placed successfully: ${formatCurrency(amount)}`);
-      } else {
-        showNotification('error', 'Failed to place bid');
-      }
-    } catch (error) {
-      showNotification('error', 'Error placing bid');
-      console.error('Error placing bid:', error);
-    }
-  };
-
-  const handleQuickBid = (teamId: string) => {
-    const increment = currentBid < 5000000 ? 500000 : 1000000;
-    const nextBid = currentBid + increment;
-    handleBid(teamId, nextBid);
-  };
-
-  const handleCustomBid = () => {
-    if (!bidAmount || !selectedTeam) return;
-    const amount = parseInt(bidAmount);
-    const team = tournamentTeams.find(t => t.id === selectedTeam);
-    if (amount <= currentBid) {
-      showNotification('error', 'Bid must be higher than current bid');
-      return;
-    }
-    if (team && amount > team.remainingBudget) {
-      showNotification('error', 'Selected team does not have enough balance to bid this amount');
-      return;
-    }
-    handleBid(selectedTeam, amount);
-    setBidAmount('');
-    setSelectedTeam('');
-  };
-
   const handleAuctionEnd = async (sold: boolean) => {
     if (!activeAuction) return;
 
@@ -235,14 +201,14 @@ const AuctionInterface: React.FC = () => {
         showNotification('error', 'Failed to complete auction');
       }
     } catch (error) {
-      showNotification('error', 'Error completing auction');
       console.error('Error completing auction:', error);
+      showNotification('error', 'Error completing auction');
     }
   };
 
-  const handleResetAuction = () => {
+  const handleResetAuction = async () => {
     if (window.confirm('Are you sure you want to reset all player statuses and start fresh? This will clear all auction history.')) {
-      resetPlayerStatuses();
+      await resetPlayerStatuses();
       showNotification('success', 'Auction reset successfully');
     }
   };
@@ -253,23 +219,13 @@ const AuctionInterface: React.FC = () => {
       await api.deleteAllAuctions();
       showNotification('success', 'All auctions deleted!');
       // Optionally refresh auction state here
-    } catch (err: any) {
-      showNotification('error', err.message || 'Failed to delete all auctions');
+    } catch (error) {
+      if (error instanceof Error) {
+        showNotification('error', error.message || 'Failed to delete all auctions');
+      } else {
+        showNotification('error', 'Failed to delete all auctions');
+      }
     }
-  };
-
-  const formatCurrency = (amount: number) => {
-    if (amount === 0) return '₹0';
-    if (amount >= 10000000) {
-      return `₹${(amount / 10000000).toFixed(1)}Cr`;
-    } else if (amount >= 100000) {
-      return `₹${(amount / 100000).toFixed(1)}L`;
-    }
-    return new Intl.NumberFormat('en-IN', {
-      style: 'currency',
-      currency: 'INR',
-      maximumFractionDigits: 0
-    }).format(amount);
   };
 
   const getCurrentBidderTeam = () => {
@@ -277,14 +233,8 @@ const AuctionInterface: React.FC = () => {
   };
 
   const canBid = user?.role === 'auctioneer';
-  const canView = user?.role === 'viewer' || user?.role === 'auctioneer';
 
   // Get auction history for current tournament
-  const auctionHistory = auctions.filter(a =>
-    a.tournamentId === myTournament?.id &&
-    (a.status === 'sold' || a.status === 'unsold')
-  ).sort((a, b) => new Date(b.endTime || '').getTime() - new Date(a.endTime || '').getTime());
-
   // Handler to mark a player as unsold
   const handleMarkUnsold = async (playerId: string) => {
     try {
@@ -294,79 +244,72 @@ const AuctionInterface: React.FC = () => {
       showNotification('success', 'Player marked as unsold successfully');
       // No need to refetch or set local state, context will update automatically via sockey
       // t
-    } catch (error: any) {
-      console.error('Error marking player as unsold:', error);
-      const errorMessage = error.response?.data?.error || error.message || 'Failed to mark player as unsold';
-      showNotification('error', errorMessage);
+    } catch (error) {
+      if (error instanceof Error) {
+        console.error('Error marking player as unsold:', error);
+        showNotification('error', error.message || 'Failed to mark player as unsold');
+      } else {
+        showNotification('error', 'Failed to mark player as unsold');
+      }
     }
   };
 
   // Add this function to handle the current bid button
   const handleCurrentBid = async () => {
     if (!activeAuction || !bidAmount || !selectedTeam) return;
-    // Ensure auctionId and teamId are strings
-    let auctionId = activeAuction.id;
-    if (auctionId && typeof auctionId === 'object') {
-      auctionId = (auctionId as any)._id || (auctionId as any).id || (auctionId as any).toString();
+    const amount = Number(bidAmount);
+    if (Number.isNaN(amount)) {
+      showNotification('error', 'Enter a valid numeric bid');
+      return;
     }
-    let teamId = selectedTeam;
-    if (teamId && typeof teamId === 'object') {
-      teamId = (teamId as any)._id || (teamId as any).id || (teamId as any).toString();
-    }
-    auctionId = String(auctionId);
-    teamId = String(teamId);
     try {
-      console.log('Placing bid with:', { auctionId, teamId, amount: Number(bidAmount) });
-      await placeBid(auctionId, teamId, Number(bidAmount));
+      await placeBid(activeAuction.id, selectedTeam, amount);
       showNotification('success', 'Current bid updated!');
-    } catch (error) {
+    } catch {
       showNotification('error', 'Failed to update current bid');
     }
   };
 
   // New state for teams and sold players
-  const [teamList, setTeamList] = useState<any[]>([]);
-  const [soldPlayersByTeam, setSoldPlayersByTeam] = useState<{ [teamId: string]: any[] }>({});
+  const [teamList, setTeamList] = useState<Team[]>([]);
+  const [soldPlayersByTeam, setSoldPlayersByTeam] = useState<SoldPlayersByTeam>({});
   const [loadingTeams, setLoadingTeams] = useState(false);
 
   // Fetch teams and sold players for the current tournament
-  const fetchTeamsAndSoldPlayers = async () => {
+  const fetchTeamsAndSoldPlayers = useCallback(async () => {
     if (!myTournament) return;
     setLoadingTeams(true);
     try {
-      // Fetch all teams for the tournament
       const teamRes = await api.fetchTeams(1, 100, myTournament.id);
-      const teams = teamRes.teams || [];
-      setTeamList(teams);
-      // Fetch all sold players for the tournament
+      setTeamList(teamRes.teams);
       const playerRes = await api.fetchPlayers(1, 500, myTournament.id);
-      const soldPlayers = (playerRes.players || []).filter((p: any) => p.status === 'sold' && p.team);
-      // Group by team
-      const byTeam: { [teamId: string]: any[] } = {};
-      soldPlayers.forEach((p: any) => {
-        const tid = typeof p.team === 'object' ? p.team._id || p.team.id : p.team;
-        if (!byTeam[tid]) byTeam[tid] = [];
-        byTeam[tid].push(p);
+      const soldPlayers = playerRes.players.filter((p) => p.status === 'sold' && p.team);
+      const byTeam: SoldPlayersByTeam = {};
+      soldPlayers.forEach((p) => {
+        if (!p.team) return;
+        const teamId = p.team;
+        if (!byTeam[teamId]) byTeam[teamId] = [];
+        byTeam[teamId].push(p);
       });
       setSoldPlayersByTeam(byTeam);
-    } catch (err) {
+    } catch (error) {
+      console.error('Failed to fetch teams or players', error);
       showNotification('error', 'Failed to fetch teams or players');
     } finally {
       setLoadingTeams(false);
     }
-  };
+  }, [myTournament, showNotification]);
 
   // Add a refresh button for teams/players
   // Optionally, fetch on mount
   useEffect(() => {
     fetchTeamsAndSoldPlayers();
-    // eslint-disable-next-line
-  }, [myTournament]);
+  }, [fetchTeamsAndSoldPlayers]);
 
   // Mark player as unsold and refresh
   const handleMarkUnsoldAndRefresh = async (playerId: string) => {
     await handleMarkUnsold(playerId);
-    fetchTeamsAndSoldPlayers();
+    await fetchTeamsAndSoldPlayers();
   };
 
   if (!myTournament) {
@@ -589,10 +532,11 @@ const AuctionInterface: React.FC = () => {
                       >
                         <option value="">Select winning team</option>
                         {tournamentTeams.map((team) => {
-                          const disabled = !!bidAmount && parseInt(bidAmount) > team.remainingBudget;
+                          const remainingBudget = toNumber(team.remainingBudget);
+                          const disabled = !!bidAmount && Number(bidAmount) > remainingBudget;
                           return (
                             <option key={team.id} value={team.id} disabled={disabled}>
-                              {team.name} (Budget: {formatCurrency(team.remainingBudget)}){disabled ? ' - Insufficient Balance' : ''}
+                              {team.name} (Budget: {formatCurrency(remainingBudget)}){disabled ? ' - Insufficient Balance' : ''}
                             </option>
                           );
                         })}
@@ -686,73 +630,79 @@ const AuctionInterface: React.FC = () => {
             </button>
           </div>
           <div className="space-y-4">
-            {teamList.map(team => (
-              <div key={team.id || team._id} className="mb-4 bg-white rounded-lg shadow-sm border-2 p-4 transition-all duration-200 hover:shadow-md"
-                style={{ borderColor: (team.color || '#888') + '30' }}>
-                <div className="flex justify-between items-center cursor-pointer">
-                  <div className="flex items-center">
-                    <div className="w-10 h-10 rounded-lg flex items-center justify-center overflow-hidden mr-3 shadow-sm"
-                      style={{ backgroundColor: (team.color || '#888') + '20', border: `2px solid ${(team.color || '#888') + '40'}` }}>
-                      {team.logo ? (
-                        <img src={team.logo} alt={team.name} className="w-full h-full object-cover" />
-                      ) : (
-                        <User className="w-5 h-5" style={{ color: team.color || '#888' }} />
-                      )}
+            {teamList.map(team => {
+              const remainingBudget = toNumber(team.remainingBudget);
+              const totalBudget = Math.max(toNumber(team.budget), 1);
+              const usedPercentage = ((totalBudget - remainingBudget) / totalBudget) * 100;
+              const safeColor = team.color || '#888';
+              return (
+                <div key={team.id} className="mb-4 bg-white rounded-lg shadow-sm border-2 p-4 transition-all duration-200 hover:shadow-md"
+                  style={{ borderColor: safeColor + '30' }}>
+                  <div className="flex justify-between items-center cursor-pointer">
+                    <div className="flex items-center">
+                      <div className="w-10 h-10 rounded-lg flex items-center justify-center overflow-hidden mr-3 shadow-sm"
+                        style={{ backgroundColor: safeColor + '20', border: `2px solid ${safeColor + '40'}` }}>
+                        {team.logo ? (
+                          <img src={team.logo} alt={team.name} className="w-full h-full object-cover" />
+                        ) : (
+                          <User className="w-5 h-5" style={{ color: safeColor }} />
+                        )}
+                      </div>
+                      <div>
+                        <div className="font-semibold text-lg" style={{ color: safeColor }}>{team.name}</div>
+                        <div className="text-sm text-gray-600">{team.owner}</div>
+                      </div>
                     </div>
-                    <div>
-                      <div className="font-semibold text-lg" style={{ color: team.color || '#888' }}>{team.name}</div>
-                      <div className="text-sm text-gray-600">{team.owner}</div>
+                    <div className="text-right">
+                      <div className="font-bold text-lg" style={{ color: safeColor }}>{formatCurrency(remainingBudget)}</div>
+                      <div className="text-xs text-gray-500">{usedPercentage.toFixed(1)}% used</div>
+                      <div className="w-24 h-2 bg-gray-200 rounded-full mt-1">
+                        <div
+                          className="h-2 rounded-full transition-all duration-300"
+                          style={{
+                            width: `${usedPercentage}%`,
+                            backgroundColor: safeColor
+                          }}
+                        />
+                      </div>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <div className="font-bold text-lg" style={{ color: team.color || '#888' }}>{formatCurrency(team.remainingBudget)}</div>
-                    <div className="text-xs text-gray-500">{((1 - team.remainingBudget / team.budget) * 100).toFixed(1)}% used</div>
-                    <div className="w-24 h-2 bg-gray-200 rounded-full mt-1">
-                      <div
-                        className="h-2 rounded-full transition-all duration-300"
-                        style={{
-                          width: `${((1 - team.remainingBudget / team.budget) * 100)}%`,
-                          backgroundColor: team.color || '#888'
-                        }}
-                      />
-                    </div>
-                  </div>
-                </div>
-                <div className="mt-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {(soldPlayersByTeam[team.id || team._id] || []).map(player => (
-                    <div key={player.id} className="bg-gray-50 rounded-lg p-3 flex items-center justify-between border-l-4 transition-all duration-200 hover:shadow-sm"
-                      style={{ borderLeftColor: team.color || '#888' }}>
-                      <div className="flex items-center space-x-3">
-                        <div className="w-8 h-8 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-full flex items-center justify-center overflow-hidden">
-                          <span className="w-4 h-4 text-white font-bold text-lg">{player.name[0]}</span>
-                        </div>
-                        <div>
-                          <div className="font-medium text-gray-900">{player.name}</div>
-                          <div className="text-xs font-semibold" style={{ color: team.color || '#888' }}>
-                            Price: {formatCurrency(player.price || 0)}
+                  <div className="mt-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {(soldPlayersByTeam[team.id] || []).map(player => (
+                      <div key={player.id} className="bg-gray-50 rounded-lg p-3 flex items-center justify-between border-l-4 transition-all duration-200 hover:shadow-sm"
+                        style={{ borderLeftColor: safeColor }}>
+                        <div className="flex items-center space-x-3">
+                          <div className="w-8 h-8 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-full flex items-center justify-center overflow-hidden">
+                            <span className="w-4 h-4 text-white font-bold text-lg">{player.name[0]}</span>
+                          </div>
+                          <div>
+                            <div className="font-medium text-gray-900">{player.name}</div>
+                            <div className="text-xs font-semibold" style={{ color: safeColor }}>
+                              Price: {formatCurrency(player.price || 0)}
+                            </div>
                           </div>
                         </div>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleMarkUnsoldAndRefresh(player.id);
+                          }}
+                          className="ml-4 px-3 py-1 bg-red-500 text-white rounded hover:bg-red-600 text-xs transition-colors"
+                        >
+                          Mark Unsold
+                        </button>
                       </div>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleMarkUnsoldAndRefresh(player.id || player._id);
-                        }}
-                        className="ml-4 px-3 py-1 bg-red-500 text-white rounded hover:bg-red-600 text-xs transition-colors"
-                      >
-                        Mark Unsold
-                      </button>
-                    </div>
-                  ))}
-                  {(soldPlayersByTeam[team.id || team._id] || []).length === 0 && (
-                    <div className="text-gray-500 text-sm col-span-full text-center py-4">
-                      <User className="w-8 h-8 mx-auto mb-2 text-gray-300" />
-                      No players in this team yet.
-                    </div>
-                  )}
+                    ))}
+                    {(soldPlayersByTeam[team.id] || []).length === 0 && (
+                      <div className="text-gray-500 text-sm col-span-full text-center py-4">
+                        <User className="w-8 h-8 mx-auto mb-2 text-gray-300" />
+                        No players in this team yet.
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}

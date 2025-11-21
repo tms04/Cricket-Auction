@@ -2,6 +2,7 @@ const Auction = require('../models/auction');
 const Tournament = require('../models/tournament');
 const Team = require('../models/team');
 const Player = require('../models/player');
+const PlayerTournament = require('../models/playerTournament');
 
 // Helper to get auctioneer's tournament
 async function getAuctioneerTournament(email) {
@@ -95,13 +96,21 @@ exports.placeBid = async (req, res) => {
         }
 
         // Check if bid is higher than current bid or at least base price for first bid
-        const player = await Player.findById(auction.player);
-        if (!player) {
-            return res.status(404).json({ error: 'Player not found' });
+        let participation = await PlayerTournament.findOne({
+            player: auction.player,
+            tournamentId: auction.tournamentId
+        });
+        let player = null;
+        if (!participation) {
+            player = await Player.findById(auction.player);
+            if (!player) {
+                return res.status(404).json({ error: 'Player not found' });
+            }
         }
         if (auction.bids.length === 0) {
             // First bid: must be at least base price
-            if (amount < (player.basePrice || 0)) {
+            const basePrice = participation ? participation.basePrice : (player?.basePrice || 0);
+            if (amount < (basePrice || 0)) {
                 return res.status(400).json({ error: 'Bid must be at least the base price' });
             }
         } else {
@@ -156,9 +165,17 @@ exports.completeAuction = async (req, res) => {
         if (auction.status !== 'active') return res.status(400).json({ error: 'Auction is already completed' });
 
         let teamPromise = null;
-        let playerPromise = null;
         let updatedTeam = null;
-        let player = null;
+        let participation = await PlayerTournament.findOne({
+            player: auction.player,
+            tournamentId: auction.tournamentId
+        });
+        if (!participation) {
+            participation = new PlayerTournament({
+                player: auction.player,
+                tournamentId: auction.tournamentId
+            });
+        }
         if (winnerId) {
             console.time("findTeam");
             const team = await Team.findById(winnerId);
@@ -174,15 +191,10 @@ exports.completeAuction = async (req, res) => {
             updatedTeam = team;
 
             // Prepare player update
-            console.time("findPlayer");
-            player = await Player.findById(auction.player);
-            console.timeEnd("findPlayer");
-            if (player) {
-                player.status = 'sold';
-                player.team = winnerId;
-                player.price = saleAmount;
-                playerPromise = player.save();
-            }
+            participation.status = 'sold';
+            participation.team = winnerId;
+            participation.price = saleAmount;
+            participation.isSold = true;
 
             // Update auction
             auction.status = 'sold';
@@ -192,18 +204,17 @@ exports.completeAuction = async (req, res) => {
             auction.bidAmount = saleAmount;
         } else {
             // Player went unsold
-            player = await Player.findById(auction.player);
-            if (player) {
-                player.status = 'unsold';
-                playerPromise = player.save();
-            }
+            participation.status = 'unsold';
+            participation.isSold = false;
+            participation.team = undefined;
+            participation.price = undefined;
             auction.status = 'unsold';
         }
 
         console.time("saveAuction");
         const auctionPromise = auction.save();
         // Save all in parallel
-        await Promise.all([teamPromise, playerPromise, auctionPromise].filter(Boolean));
+        await Promise.all([teamPromise, participation.save(), auctionPromise].filter(Boolean));
         console.timeEnd("saveAuction");
 
         // Emit socket event for auction completion
@@ -274,9 +285,9 @@ exports.resetAuctions = async (req, res) => {
         const { tournamentId } = req.params;
         await Auction.deleteMany({ tournamentId });
         // Reset all players efficiently
-        await Player.updateMany(
+        await PlayerTournament.updateMany(
             { tournamentId },
-            { $set: { status: 'available', team: null, price: null } }
+            { $set: { status: 'available', team: null, price: null, isSold: false } }
         );
         // Reset all teams
         const teams = await Team.find({ tournamentId });

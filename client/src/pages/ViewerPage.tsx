@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Clock, CheckCircle, Trophy, ArrowRight, Zap } from 'lucide-react';
+import { CheckCircle, Trophy, Zap } from 'lucide-react';
 
 interface TournamentMinimal {
     id: string;
@@ -22,8 +22,8 @@ const ViewerPage: React.FC = () => {
             .then((data) => {
                 // Only keep minimal fields
                 const minimal = Array.isArray(data)
-                    ? data.map((t: any) => ({
-                        id: t._id || t.id,
+                    ? data.map((t: { _id?: string; id?: string; name: string; status: string; logo?: string; photo?: string }) => ({
+                        id: t._id || t.id || '',
                         name: t.name,
                         status: t.status,
                         logo: t.logo || t.photo || undefined,
@@ -32,7 +32,7 @@ const ViewerPage: React.FC = () => {
                 setTournaments(minimal);
             })
             .finally(() => setIsLoading(false));
-    }, []);
+    }, [API_BASE]);
 
     const ongoingTournaments = tournaments.filter(t => t.status !== 'completed');
     const completedTournaments = tournaments.filter(t => t.status === 'completed');

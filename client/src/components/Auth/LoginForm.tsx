@@ -37,18 +37,12 @@ const LoginForm: React.FC = () => {
           navigate('/dashboard');
         }
       }
-    } catch (err) {
+    } catch {
       setError('An error occurred. Please try again.');
     } finally {
       setIsLoading(false);
     }
   };
-
-  const loginCredentials = [
-    { role: 'Master', email: 'master@auction.com', password: 'master@2025', color: 'bg-purple-500' },
-    { role: 'Auctioneer', email: 'auctioneer@auction.com', password: 'auction123', color: 'bg-blue-500' },
-    { role: 'Viewer', email: 'viewer@auction.com', password: 'viewer123', color: 'bg-green-500' }
-  ];
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-white to-emerald-50 flex items-center justify-center p-4">

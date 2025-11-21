@@ -1,7 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { AppContextType, Tournament, Team, Player, AuctionItem } from '../types';
 import * as api from '../api';
-import { io, Socket } from 'socket.io-client';
 import { useAuth } from './AuthContext';
 import { fetchPlayers as fetchPlayersApi, fetchTeams as fetchTeamsApi } from '../api';
 
@@ -13,7 +12,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [players, setPlayers] = useState<Player[]>([]);
   const [auctions, setAuctions] = useState<AuctionItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [socket, setSocket] = useState<Socket | null>(null);
   const [activeTournament, setActiveTournament] = useState<Tournament | null>(null);
   const { user, authLoading } = useAuth();
 
@@ -44,41 +42,45 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       try {
         // Always fetch tournaments for everyone
         const tournamentsData = await api.fetchTournaments();
-        const safeTournaments = Array.isArray(tournamentsData) ? tournamentsData : [];
-        setTournaments(
-          safeTournaments.map((t: any) => ({
-            ...t,
-            id: t._id || t.id,
-            maxTeams: Number(t.maxTeams),
-            budget: Number(t.budget),
-            status: t.status || 'upcoming'
-          }))
-        );
+        const normalizedTournaments = tournamentsData.map((t) => ({
+          ...t,
+          maxTeams: Number(t.maxTeams),
+          budget: Number(t.budget),
+          status: t.status || 'upcoming'
+        }));
+        setTournaments(normalizedTournaments);
+
+        const resolvedTournamentId = (() => {
+          if (!user || user.role !== 'auctioneer' || !user.email) return undefined;
+          const foundTournament = normalizedTournaments.find(
+            (t) => t.auctioneerEmail && t.auctioneerEmail.toLowerCase() === user.email?.toLowerCase()
+          );
+          return foundTournament?.id;
+        })();
 
         // Only fetch teams, players, and auctions if user is present
         if (user && user.id && !cancelled) {
+          if (user.role === 'auctioneer' && !resolvedTournamentId && !myTournament?.id) {
+            setTeams([]);
+            setPlayers([]);
+            setAuctions([]);
+            return;
+          }
+          const tournamentScopeId = user.role === 'auctioneer'
+            ? (myTournament?.id || resolvedTournamentId)
+            : undefined;
           const [teamsData, playersData, auctionsData] = await Promise.all([
-            fetchTeamsApi(1, 20, myTournament?.id),
-            fetchPlayersApi(1, 50, myTournament?.id),
+            fetchTeamsApi(1, 20, tournamentScopeId),
+            fetchPlayersApi(1, 50, tournamentScopeId),
             api.fetchAuctions()
           ]);
-          const safeTeams = Array.isArray(teamsData?.teams) ? teamsData.teams : [];
-          setTeams(safeTeams.map((t: any) => ({
-            ...t,
-            id: t._id || t.id
-          })));
-          const safePlayers = Array.isArray(playersData?.players) ? playersData.players : [];
-          setPlayers(safePlayers.map((p: any) => ({
-            ...p,
-            id: p._id || p.id
-          })));
-          const safeAuctions = Array.isArray(auctionsData) ? auctionsData : [];
-          setAuctions(safeAuctions.map((a: any) => ({
+          setTeams(teamsData.teams);
+          setPlayers(playersData.players);
+          setAuctions(auctionsData.map((a) => ({
             ...a,
-            id: a._id || a.id,
             currentBidder: typeof a.currentBidder === 'object' && a.currentBidder !== null
-              ? a.currentBidder._id || a.currentBidder.id
-              : a.currentBidder
+              ? (a.currentBidder as { _id?: string; id?: string })._id || (a.currentBidder as { id?: string }).id || undefined
+              : (a.currentBidder === null ? undefined : a.currentBidder)
           })));
         } else if (!user && !cancelled) {
           setTeams([]);
@@ -94,7 +96,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     fetchAll();
     return () => { cancelled = true; };
-  }, [user?.id, authLoading]);
+  }, [user, authLoading, myTournament?.id]);
 
   // Cleanup tournaments ONLY on logout
   useEffect(() => {
@@ -106,23 +108,50 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [user, authLoading]);
 
+  const refreshTeamsState = async () => {
+    const tournamentScopeId = user?.role === 'auctioneer' ? myTournament?.id : undefined;
+    if (user?.role === 'auctioneer' && !tournamentScopeId) {
+      setTeams([]);
+      return;
+    }
+    const teamsResponse = await fetchTeamsApi(1, 20, tournamentScopeId);
+    setTeams(teamsResponse.teams);
+  };
+
+  const refreshPlayersState = async () => {
+    const tournamentScopeId = user?.role === 'auctioneer' ? myTournament?.id : undefined;
+    if (user?.role === 'auctioneer' && !tournamentScopeId) {
+      setPlayers([]);
+      return;
+    }
+    const playersResponse = await fetchPlayersApi(1, 50, tournamentScopeId);
+    setPlayers(playersResponse.players);
+  };
+
+  const refreshAuctionsState = async () => {
+    const auctionsData = await api.fetchAuctions();
+    setAuctions(auctionsData.map((a) => ({
+      ...a,
+      currentBidder: typeof a.currentBidder === 'object' && a.currentBidder !== null
+        ? (a.currentBidder as { _id?: string; id?: string })._id || (a.currentBidder as { id?: string }).id || undefined
+        : (a.currentBidder === null ? undefined : a.currentBidder)
+    })));
+  };
+
   // Backend CRUD operations
   const addTournament = async (tournament: Omit<Tournament, 'id' | 'createdAt'>) => {
     const newTournament = await api.createTournament(tournament);
     const tournamentsData = await api.fetchTournaments();
-    setTournaments(Array.isArray(tournamentsData)
-      ? tournamentsData.map((t: any) => ({
+    setTournaments(
+      tournamentsData.map((t) => ({
         ...t,
-        id: t._id || t.id,
         maxTeams: Number(t.maxTeams),
         budget: Number(t.budget),
         status: t.status || 'upcoming'
       }))
-      : []
     );
     return {
       ...newTournament,
-      id: newTournament._id || newTournament.id,
       maxTeams: Number(newTournament.maxTeams),
       budget: Number(newTournament.budget),
       status: newTournament.status || 'upcoming'
@@ -130,15 +159,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
   const updateTournament = async (id: string, updates: Partial<Tournament>) => {
     const updated = await api.updateTournament(id, updates);
-    setTournaments(prev => prev.map(t => (t.id === id
-      ? {
-        ...updated,
-        id: updated._id || updated.id,
-        maxTeams: Number(updated.maxTeams),
-        budget: Number(updated.budget),
-        status: updated.status || 'upcoming'
-      }
-      : t
+    setTournaments(prev => prev.map(t => (
+      t.id === id
+        ? {
+          ...updated,
+          maxTeams: Number(updated.maxTeams),
+          budget: Number(updated.budget),
+          status: updated.status || 'upcoming'
+        }
+        : t
     )));
   };
   const deleteTournament = async (id: string) => {
@@ -150,20 +179,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const addTeam = async (team: Omit<Team, 'id'>) => {
     const newTeam = await api.createTeam(team);
-    const teamsData = await fetchTeamsApi(1, 20, myTournament?.id);
-    const safeTeams = Array.isArray(teamsData?.teams) ? teamsData.teams : [];
-    setTeams(safeTeams.map((t: any) => ({
-      ...t,
-      id: t._id || t.id
-    })));
-    const mappedTeam = { ...newTeam, id: newTeam._id || newTeam.id };
-    return mappedTeam;
+    await refreshTeamsState();
+    return newTeam;
   };
+
   const updateTeam = async (id: string, updates: Partial<Team>) => {
     const updated = await api.updateTeam(id, updates);
-    const mappedTeam = { ...updated, id: updated._id || updated.id };
-    setTeams(prev => prev.map(t => t.id === id ? mappedTeam : t));
+    setTeams(prev => prev.map(t => t.id === id ? updated : t));
   };
+
   const deleteTeam = async (id: string) => {
     await api.deleteTeam(id);
     setTeams(prev => prev.filter(t => t.id !== id));
@@ -175,35 +199,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const newPlayer = await api.createPlayer(player);
     console.log('AppContext - Player created, response:', newPlayer);
     console.log('AppContext - Photo URL in response:', newPlayer.photo);
-    // Refetch the full list to ensure state is in sync with backend
-    const playersData = await fetchPlayersApi(1, 50, myTournament?.id);
-    const safePlayers = Array.isArray(playersData?.players) ? playersData.players : [];
-    setPlayers(safePlayers.map((p: any) => ({
-      ...p,
-      id: p._id || p.id
-    })));
-    const mappedPlayer = { ...newPlayer, id: newPlayer._id || newPlayer.id };
-    return mappedPlayer;
+    await refreshPlayersState();
+    return newPlayer;
   };
   const updatePlayer = async (id: string, updates: Partial<Player>) => {
     await api.updatePlayer(id, updates);
-    // Refetch the full list to ensure state is in sync with backend
-    const playersData = await fetchPlayersApi(1, 50, myTournament?.id);
-    const safePlayers = Array.isArray(playersData?.players) ? playersData.players : [];
-    setPlayers(safePlayers.map((p: any) => ({
-      ...p,
-      id: p._id || p.id
-    })));
+    await refreshPlayersState();
   };
-  const deletePlayer = async (id: string) => {
-    await api.deletePlayer(id);
-    // Refetch the full list to ensure state is in sync with backend
-    const playersData = await fetchPlayersApi(1, 50, myTournament?.id);
-    const safePlayers = Array.isArray(playersData?.players) ? playersData.players : [];
-    setPlayers(safePlayers.map((p: any) => ({
-      ...p,
-      id: p._id || p.id
-    })));
+  const deletePlayer = async (id: string, tournamentId?: string) => {
+    await api.deletePlayer(id, tournamentId);
+    await refreshPlayersState();
   };
 
   // Auctions
@@ -217,69 +222,41 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return null;
     }
 
-    // Map the data properly for MongoDB - use original _id values
     const auctionData = {
-      player: (player as any)._id || playerId, // Use original MongoDB _id
+      player: player.playerId || playerId,
       team: null,
       bidAmount: player.basePrice || 1000000, // Use basePrice or default to 10L
-      status: 'active',
-      tournamentId: (myTournament as any)._id || tournamentId // Use original MongoDB _id
+      status: 'active' as const,
+      tournamentId
     };
 
     try {
       const newAuction = await api.createAuction(auctionData);
-      const normalizedAuction = {
-        ...newAuction,
-        id: newAuction._id || newAuction.id,
-        playerId: newAuction.playerId || newAuction.player || (newAuction.player && newAuction.player._id) || undefined,
-      };
-      setAuctions(prev => [...prev, normalizedAuction]);
-      return normalizedAuction;
-    } catch (error) {
+      setAuctions(prev => [...prev, newAuction]);
+      return newAuction;
+    } catch {
       return null;
     }
-  };
-  const updateAuction = async (id: string, updates: Partial<AuctionItem>) => {
-    const updated = await api.updateAuction(id, updates);
-    setAuctions(prev => prev.map(a => a.id === id ? { ...updated, id: updated._id || updated.id } : a));
-  };
-  const deleteAuction = async (id: string) => {
-    await api.deleteAuction(id);
-    setAuctions(prev => prev.filter(a => a.id !== id));
   };
 
   const placeBid = async (auctionId: string, teamId: string, amount: number) => {
     try {
       const updatedAuction = await api.placeBid(auctionId, teamId, amount);
-      // Normalize the updated auction
-      const normalizedAuction = {
-        ...updatedAuction,
-        id: updatedAuction._id || updatedAuction.id,
-        playerId: updatedAuction.playerId || updatedAuction.player || (updatedAuction.player && updatedAuction.player._id) || undefined,
-      };
       setAuctions(prev =>
-        prev.map(a => a.id === normalizedAuction.id ? normalizedAuction : a)
+        prev.map(a => a.id === updatedAuction.id ? updatedAuction : a)
       );
       return true;
-    } catch (error) {
+    } catch {
       return false;
     }
   };
 
   const completeAuction = async (auctionId: string, winnerId?: string, finalAmount?: number) => {
     try {
-      const completedAuction = await api.completeAuction(auctionId, winnerId, finalAmount);
-      // Always refetch players and teams after auction completion to ensure up-to-date state
-      const [playersData, teamsData] = await Promise.all([
-        fetchPlayersApi(1, 50, myTournament?.id),
-        fetchTeamsApi(1, 20, myTournament?.id)
-      ]);
-      const safePlayers = Array.isArray(playersData?.players) ? playersData.players : [];
-      setPlayers(safePlayers.map((p: any) => ({ ...p, id: p._id || p.id })));
-      const safeTeams = Array.isArray(teamsData?.teams) ? teamsData.teams : [];
-      setTeams(safeTeams.map((t: any) => ({ ...t, id: t._id || t.id })));
+      await api.completeAuction(auctionId, winnerId, finalAmount);
+      await Promise.all([refreshPlayersState(), refreshTeamsState()]);
       return true;
-    } catch (error) {
+    } catch {
       return false;
     }
   };
@@ -288,51 +265,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!myTournament?.id) return;
     try {
       await api.resetAuctions(myTournament.id);
-      // Refetch all data to update state
-      const [playersData, teamsData, auctionsData] = await Promise.all([
-        fetchPlayersApi(1, 50, myTournament?.id),
-        fetchTeamsApi(1, 20, myTournament?.id),
-        api.fetchAuctions()
+      await Promise.all([
+        refreshPlayersState(),
+        refreshTeamsState(),
+        refreshAuctionsState()
       ]);
-      const safePlayers = Array.isArray(playersData?.players) ? playersData.players : [];
-      setPlayers(safePlayers.map((p: any) => ({ ...p, id: p._id || p.id })));
-      const safeTeams = Array.isArray(teamsData?.teams) ? teamsData.teams : [];
-      setTeams(safeTeams.map((t: any) => ({ ...t, id: t._id || t.id })));
-      const safeAuctions = Array.isArray(auctionsData) ? auctionsData : [];
-      setAuctions(safeAuctions.map((a: any) => ({
-        ...a,
-        id: a._id || a.id,
-        currentBidder: typeof a.currentBidder === 'object' && a.currentBidder !== null
-          ? a.currentBidder._id || a.currentBidder.id
-          : a.currentBidder
-      })));
-    } catch (error) {
+    } catch {
+      // Silently fail - error handling is done at API level
     }
   };
 
   // Fetch teams and players for manual refresh
   const fetchTeams = async () => {
-    const teamsData = await fetchTeamsApi(1, 20, myTournament?.id);
-    const safeTeams = Array.isArray(teamsData?.teams) ? teamsData.teams : [];
-    setTeams(safeTeams.map((t: any) => ({ ...t, id: t._id || t.id })));
+    await refreshTeamsState();
   };
   const fetchPlayers = async () => {
-    const playersData = await fetchPlayersApi(1, 50, myTournament?.id);
-    const safePlayers = Array.isArray(playersData?.players) ? playersData.players : [];
-    setPlayers(safePlayers.map((p: any) => ({ ...p, id: p._id || p.id })));
+    await refreshPlayersState();
   };
 
   // Fetch auctions for polling (public)
   const fetchAuctions = async () => {
-    const auctionsData = await api.fetchAuctions();
-    const safeAuctions = Array.isArray(auctionsData) ? auctionsData : [];
-    setAuctions(safeAuctions.map((a: any) => ({
-      ...a,
-      id: a._id || a.id,
-      currentBidder: typeof a.currentBidder === 'object' && a.currentBidder !== null
-        ? a.currentBidder._id || a.currentBidder.id
-        : a.currentBidder
-    })));
+    await refreshAuctionsState();
   };
 
   // Only show loading spinner for authenticated users

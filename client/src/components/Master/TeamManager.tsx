@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Users, DollarSign, Edit2, Trash2, User, CheckCircle, XCircle } from 'lucide-react';
+import { Plus, Users, Edit2, Trash2, User, CheckCircle, XCircle } from 'lucide-react';
 import { useApp } from '../../contexts/AppContext';
 import { Team } from '../../types';
 import { useAuth } from '../../contexts/AuthContext';
@@ -7,7 +7,7 @@ import { fetchTeams } from '../../api';
 import { uploadImage, getOptimizedImageUrl } from '../../utils/cloudinary';
 
 const TeamManager: React.FC = () => {
-  const { teams: contextTeams, addTeam, updateTeam, deleteTeam, players, myTournament, tournaments } = useApp();
+  const { addTeam, updateTeam, deleteTeam, players, myTournament, tournaments } = useApp();
   const { user } = useAuth();
   const [showForm, setShowForm] = useState(false);
   const [editingTeam, setEditingTeam] = useState<Team | null>(null);
@@ -18,23 +18,24 @@ const TeamManager: React.FC = () => {
     color: '#10B981',
     logo: ''
   });
-  const [page, setPage] = useState(1);
-  const [total, setTotal] = useState(0);
+  const [page] = useState(1);
   const [teams, setTeams] = useState<Team[]>([]);
 
   useEffect(() => {
     const fetchPaginatedTeams = async () => {
       // Fetch only teams for the current tournament
       const data = await fetchTeams(page, 20, myTournament?.id);
-      const safeTeams = Array.isArray(data.teams) ? data.teams.map((t: any) => ({ ...t, id: t._id || t.id })) : [];
+      const safeTeams = Array.isArray(data.teams) ? data.teams.map((t) => {
+        const teamId = (t as { _id?: string; id?: string })._id || (t as { _id?: string; id?: string }).id;
+        if (!teamId) throw new Error('Team missing id');
+        return { ...t, id: teamId } as Team;
+      }) : [];
       setTeams(safeTeams);
-      setTotal(data.total);
     };
     if (myTournament?.id) {
       fetchPaginatedTeams();
     } else {
       setTeams([]);
-      setTotal(0);
     }
   }, [page, myTournament?.id]);
 
@@ -57,9 +58,6 @@ const TeamManager: React.FC = () => {
 
   // For auctioneers, always use myTournament
   const isAuctioneer = user?.role === 'auctioneer';
-  const tournamentId = isAuctioneer && myTournament ? myTournament.id : undefined;
-  const tournamentName = isAuctioneer && myTournament ? myTournament.name : undefined;
-  const tournamentBudget = isAuctioneer && myTournament ? myTournament.budget : undefined;
 
   // Ensure teams is always an array
   const safeTeams = Array.isArray(teams) ? teams : [];
@@ -81,7 +79,7 @@ const TeamManager: React.FC = () => {
         updateTeam(editingTeam.id, updateData);
         showNotification('success', 'Team updated successfully');
       } else {
-        const newTeam = addTeam({
+        addTeam({
           ...formData,
           tournamentId: isAuctioneer ? myTournament!.id : '',
           budget: isAuctioneer ? myTournament!.budget : 0,
@@ -93,9 +91,8 @@ const TeamManager: React.FC = () => {
       }
       resetForm();
       setShowForm(false);
-    } catch (error) {
+    } catch {
       showNotification('error', 'Failed to save team');
-      console.error('Error saving team:', error);
     }
   };
 
@@ -106,7 +103,7 @@ const TeamManager: React.FC = () => {
       const imageUrl = await uploadImage(file);
       setFormData((prev) => ({ ...prev, logo: imageUrl }));
       showNotification('success', 'Logo uploaded successfully!');
-    } catch (error) {
+    } catch {
       showNotification('error', 'Failed to upload logo');
     }
   };

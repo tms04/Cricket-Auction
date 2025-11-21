@@ -5,7 +5,7 @@ import { uploadImage, getOptimizedImageUrl } from '../utils/cloudinary';
 
 const ProfilePage: React.FC = () => {
     const { user } = useAuth();
-    const [profilePicture, setProfilePicture] = useState<string>(user?.profilePicture || '');
+    const [, setProfilePicture] = useState<string>(user?.profilePicture || '');
     const [preview, setPreview] = useState<string>(user?.profilePicture || '');
     const [loading, setLoading] = useState(false);
     const [message, setMessage] = useState<string | null>(null);
@@ -21,7 +21,7 @@ const ProfilePage: React.FC = () => {
         try {
             const imageUrl = await uploadImage(file);
             setPreview(imageUrl);
-        } catch (error) {
+        } catch {
             setMessage('Failed to upload image.');
         }
     };
@@ -34,7 +34,7 @@ const ProfilePage: React.FC = () => {
             await api.updateProfile(preview);
             setProfilePicture(preview);
             setMessage('Profile picture updated!');
-        } catch (err) {
+        } catch {
             setMessage('Failed to update profile picture.');
         } finally {
             setLoading(false);

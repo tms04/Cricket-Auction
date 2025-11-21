@@ -2,6 +2,7 @@ const Tournament = require('../models/tournament');
 const User = require('../models/user');
 const Team = require('../models/team');
 const Player = require('../models/player');
+const PlayerTournament = require('../models/playerTournament');
 const bcrypt = require('bcryptjs');
 
 exports.getAllTournaments = async (req, res) => {
@@ -100,11 +101,8 @@ exports.deleteTournament = async (req, res) => {
         for (const team of teams) {
             await team.deleteOne();
         }
-        // Delete all players associated with this tournament
-        const players = await Player.find({ tournamentId: req.params.id });
-        for (const player of players) {
-            await player.deleteOne();
-        }
+        // Delete all player participations associated with this tournament
+        await PlayerTournament.deleteMany({ tournamentId: req.params.id });
         // Delete all auctioneers assigned to this tournament
         const auctioneers = await User.find({ role: 'auctioneer', tournament: req.params.id });
         for (const auctioneer of auctioneers) {

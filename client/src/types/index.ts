@@ -40,8 +40,18 @@ export interface Team {
 
 export interface Player {
   id: string;
+  playerId?: string;
+  participationId?: string;
   name: string;
   team?: string;
+  teamName?: string;
+  teamDetails?: {
+    _id?: string;
+    id?: string;
+    name?: string;
+    logo?: string;
+    color?: string;
+  };
   price?: number;
   basePrice?: number;
   isSold?: boolean;
@@ -57,6 +67,8 @@ export interface Player {
   primaryRole?: string;
   battingStyle?: string;
   bowlingStyle?: string;
+  playerDetails?: Record<string, unknown>;
+  participationDetails?: Record<string, unknown>;
 }
 
 export interface AuctionItem {
@@ -105,7 +117,7 @@ export interface AppContextType {
   updateTournament: (id: string, updates: Partial<Tournament>) => Promise<void>;
   deleteTournament: (id: string) => Promise<void>;
   deleteTeam: (id: string) => Promise<void>;
-  deletePlayer: (id: string) => Promise<void>;
+  deletePlayer: (id: string, tournamentId?: string) => Promise<void>;
   startAuction: (playerId: string) => Promise<AuctionItem | null>;
   placeBid: (auctionId: string, teamId: string, amount: number) => Promise<boolean>;
   completeAuction: (auctionId: string, winnerId?: string, finalAmount?: number) => Promise<boolean>;
@@ -113,5 +125,4 @@ export interface AppContextType {
   fetchTeams?: () => Promise<void>;
   fetchPlayers?: () => Promise<void>;
   fetchAuctions?: () => Promise<void>;
-  socket?: any;
 }

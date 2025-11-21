@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
-import { useApp } from '../contexts/AppContext';
 import { Gavel, Menu, X } from 'lucide-react'; // Added Menu and X icons for mobile nav
 import Confetti from 'react-confetti';
 import * as api from '../api';
@@ -23,21 +22,28 @@ const TournamentPage: React.FC = () => {
     const [showUnsoldAnimation, setShowUnsoldAnimation] = useState(false);
     const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
     const soldTimeoutRef = useRef<number | null>(null);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const prevLiveAuctionRef = useRef<any | null>(null);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const [liveAuction, setLiveAuction] = useState<any>(null);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const [prevAuction, setPrevAuction] = useState<any>(null);
     const [hadBid, setHadBid] = useState(false);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const [liveAuctionPlayer, setLiveAuctionPlayer] = useState<any>(null);
     const [currentBidderTeam, setCurrentBidderTeam] = useState<string | null>(null);
     const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000';
-    const [socket, setSocket] = useState<Socket | null>(null);
+    const [, setSocket] = useState<Socket | null>(null);
 
     // --- State for player tabs ---
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const [tabPlayers, setTabPlayers] = useState<any[]>([]);
     const [tabPlayersLoading, setTabPlayersLoading] = useState(false);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const [teams, setTeams] = useState<any[]>([]);
     const [teamsLoading, setTeamsLoading] = useState(false);
     const [expandedTeamId, setExpandedTeamId] = useState<string | null>(null);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const [teamPlayers, setTeamPlayers] = useState<{ [teamId: string]: any[] }>({});
     const [teamPlayersLoading, setTeamPlayersLoading] = useState<{ [teamId: string]: boolean }>({});
 
@@ -125,7 +131,7 @@ const TournamentPage: React.FC = () => {
         }
         console.log('Extracted playerId:', playerId);
         if (typeof playerId === 'string' && playerId && playerId !== '[object Object]') {
-            api.fetchPlayerById(playerId).then(player => {
+            api.fetchPlayerById(playerId, id).then(player => {
                 console.log('Fetched player data:', player);
                 console.log('Player photo URL:', player?.photo);
                 setLiveAuctionPlayer(player);
@@ -136,7 +142,7 @@ const TournamentPage: React.FC = () => {
         } else {
             setLiveAuctionPlayer(null);
         }
-    }, [liveAuction]);
+    }, [liveAuction, id]);
 
     useEffect(() => {
         const prev = prevLiveAuctionRef.current;
@@ -179,7 +185,7 @@ const TournamentPage: React.FC = () => {
     useEffect(() => {
         if (tab === 'available' || tab === 'sold' || tab === 'unsold') {
             setTabPlayersLoading(true);
-            let status = tab;
+            const status = tab;
             // API expects 'available', 'sold', 'unsold'
             fetch(`${API_BASE}/api/players?status=${status}&tournamentId=${tournament?.id}`)
                 .then(res => res.json())
@@ -223,27 +229,9 @@ const TournamentPage: React.FC = () => {
         }
     };
 
-    // Helper to get the player for the live auction (handles both playerId and player object)
-    const getLiveAuctionPlayer = (auction: any) => {
-        if (!auction) return null;
-        if (auction.playerId) {
-            return null; // No players state, so cannot find player by ID directly
-        } else if (auction.player && auction.player._id) {
-            // Try to find in players, fallback to embedded object
-            return null; // No players state, so cannot find player by ID directly
-        }
-        return null;
-    };
     // Helper to get the current bid (handles both currentBid and bidAmount)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const getLiveAuctionBid = (auction: any) => auction?.currentBid ?? auction?.bidAmount ?? '';
-    // Helper to get the current bidder (handles both currentBidder/team as string or object)
-    const getLiveAuctionBidder = (auction: any) => {
-        const bidder = auction?.currentBidder ?? auction?.team ?? '';
-        if (typeof bidder === 'object' && bidder !== null) {
-            return bidder._id || '';
-        }
-        return bidder;
-    };
 
     // Helper to get card color classes based on primaryRole
     const getCardColor = (role: string) => {

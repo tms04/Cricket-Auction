@@ -6,7 +6,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { uploadImage, getOptimizedImageUrl } from '../../utils/cloudinary';
 
 const TournamentManager: React.FC = () => {
-  const { tournaments, addTournament, updateTournament, deleteTournament, activeTournament, setActiveTournament, isLoading } = useApp();
+  const { tournaments, addTournament, updateTournament, deleteTournament, activeTournament, isLoading } = useApp();
   const { user } = useAuth();
   const [showForm, setShowForm] = useState(false);
   const [editingTournament, setEditingTournament] = useState<Tournament | null>(null);
@@ -69,7 +69,7 @@ const TournamentManager: React.FC = () => {
       }
       resetForm();
       setShowForm(false);
-    } catch (error) {
+    } catch {
       showNotification('error', 'Failed to save tournament');
     }
   };
@@ -100,7 +100,7 @@ const TournamentManager: React.FC = () => {
       try {
         await deleteTournament(tournament.id);
         showNotification('success', 'Tournament deleted successfully');
-      } catch (error) {
+      } catch {
         showNotification('error', 'Failed to delete tournament');
       }
     }
@@ -113,7 +113,7 @@ const TournamentManager: React.FC = () => {
       const imageUrl = await uploadImage(file);
       setFormData((prev) => ({ ...prev, logo: imageUrl }));
       showNotification('success', 'Logo uploaded successfully!');
-    } catch (error) {
+    } catch {
       showNotification('error', 'Failed to upload logo');
     }
   };
@@ -362,7 +362,7 @@ const TournamentManager: React.FC = () => {
                 <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
                 <select
                   value={formData.status}
-                  onChange={(e) => setFormData({ ...formData, status: e.target.value as any })}
+                  onChange={(e) => setFormData({ ...formData, status: e.target.value as Tournament['status'] })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 >
                   <option value="upcoming">Upcoming</option>

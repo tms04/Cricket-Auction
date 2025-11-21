@@ -6,7 +6,8 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "nodemon index.js",
-    "dev": "node index.js"
+    "dev": "node index.js",
+    "migrate:players": "node scripts/migratePlayerParticipations.js"
   },
   "keywords": [],
   "author": "",
