@@ -125,10 +125,20 @@ export const deletePlayer = async (id: string, tournamentId?: string): Promise<v
 };
 
 // Auctions
-const mapAuction = (auction: RawAuction): AuctionItem => ({
-    ...withNormalizedId(auction),
-    playerId: auction.playerId || ''
-});
+const mapAuction = (auction: RawAuction): AuctionItem => {
+    // Some backend responses include only `player` (as id or populated object),
+    // others normalize it to `playerId`. Make sure we always expose a string `playerId`.
+    const raw: any = auction as any;
+    const fallbackPlayerId =
+        (typeof raw.player === 'string' && raw.player) ||
+        (raw.player && (raw.player._id || raw.player.id)) ||
+        '';
+
+    return {
+        ...withNormalizedId(auction),
+        playerId: auction.playerId || fallbackPlayerId
+    };
+};
 
 export const fetchAuctions = async (): Promise<AuctionItem[]> => {
     const res = await axios.get<RawAuction[]>(`${API_BASE}/auctions`);
