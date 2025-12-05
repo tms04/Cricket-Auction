@@ -71,7 +71,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             : undefined;
           const [teamsData, playersData, auctionsData] = await Promise.all([
             fetchTeamsApi(1, 20, tournamentScopeId),
-            fetchPlayersApi(1, 50, tournamentScopeId),
+            fetchPlayersApi(1, 10000, tournamentScopeId),
             api.fetchAuctions()
           ]);
           setTeams(teamsData.teams);
@@ -124,7 +124,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setPlayers([]);
       return;
     }
-    const playersResponse = await fetchPlayersApi(1, 50, tournamentScopeId);
+    const playersResponse = await fetchPlayersApi(1, 10000, tournamentScopeId);
     setPlayers(playersResponse.players);
   };
 

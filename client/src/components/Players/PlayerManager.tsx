@@ -64,7 +64,7 @@ const PlayerManagerContent: React.FC = () => {
       return;
     }
     const tournamentScopeId = isAuctioneer ? myTournament?.id : undefined;
-    const data = await fetchPlayers(page, 50, tournamentScopeId);
+    const data = await fetchPlayers(page, 10000, tournamentScopeId);
     setPlayers(data.players || []);
     setTotal(data.total);
   }, [isAuctioneer, myTournament?.id, page]);
@@ -245,11 +245,11 @@ const PlayerManagerContent: React.FC = () => {
         showNotification('success', 'Player deleted successfully');
         // Refetch players after delete
         if (user?.role === 'auctioneer' && myTournament) {
-          const data = await fetchPlayers(page, 50, myTournament.id);
+          const data = await fetchPlayers(page, 10000, myTournament.id);
           setPlayers(data.players || []);
           setTotal(data.total);
         } else {
-          const data = await fetchPlayers(page, 50);
+          const data = await fetchPlayers(page, 10000);
           setPlayers(data.players || []);
           setTotal(data.total);
         }
