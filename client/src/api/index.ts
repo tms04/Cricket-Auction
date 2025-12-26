@@ -181,6 +181,20 @@ export const markPlayerUnsold = async (playerId: string): Promise<{ player: Play
     };
 };
 
+export const revertUnsoldCategory = async (category: string, tournamentId?: string) => {
+    const payload: { category: string; tournamentId?: string } = { category };
+    if (tournamentId) payload.tournamentId = tournamentId;
+    const res = await axios.post<{ matched: number; modified: number }>(`${API_BASE}/players/revertUnsoldCategory`, payload, { headers: authHeader() });
+    return res.data;
+};
+
+export const revertUnsold1Category = async (category: string, tournamentId?: string) => {
+    const payload: { category: string; tournamentId?: string } = { category };
+    if (tournamentId) payload.tournamentId = tournamentId;
+    const res = await axios.post<{ matched: number; modified: number }>(`${API_BASE}/players/revertUnsold1Category`, payload, { headers: authHeader() });
+    return res.data;
+};
+
 export const fetchPlayerById = async (id: string, tournamentId?: string): Promise<Player> => {
     const params = new URLSearchParams();
     if (tournamentId) {

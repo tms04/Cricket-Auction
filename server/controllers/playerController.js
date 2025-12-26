@@ -104,7 +104,14 @@ exports.getAllPlayers = async (req, res) => {
 
         // Build filter from query
         const filter = {};
-        if (req.query.status) filter.status = req.query.status;
+        if (req.query.status) {
+            // When requesting 'unsold', include both 'unsold' and 'unsold1' players
+            if (req.query.status === 'unsold') {
+                filter.status = { $in: ['unsold', 'unsold1'] };
+            } else {
+                filter.status = req.query.status;
+            }
+        }
         if (req.query.team) filter.team = req.query.team;
 
         if (req.query.tournamentId) {
@@ -428,6 +435,90 @@ exports.markUnsold = async (req, res) => {
         res.json({ player: hydrateParticipation(populated), team: updatedTeam });
     } catch (err) {
         console.error('Error in markUnsold:', err);
+        res.status(500).json({ error: err.message });
+    }
+};
+
+// Bulk revert all UNSOLD players of a category to AVAILABLE within a tournament
+exports.revertUnsoldCategoryToAvailable = async (req, res) => {
+    try {
+        const { category, tournamentId } = req.body;
+        if (!category) {
+            return res.status(400).json({ error: 'category is required' });
+        }
+
+        const filter = {
+            status: 'unsold',
+            category
+        };
+
+        if (tournamentId) {
+            filter.tournamentId = tournamentId;
+        } else if (req.user && req.user.role === 'auctioneer') {
+            const myTournament = await getAuctioneerTournament(req.user.email);
+            if (!myTournament) {
+                return res.status(403).json({ error: 'Forbidden: No tournament assigned to this auctioneer.' });
+            }
+            filter.tournamentId = myTournament._id;
+        } else {
+            return res.status(400).json({ error: 'tournamentId is required' });
+        }
+
+        const result = await PlayerTournament.updateMany(filter, {
+            status: 'available',
+            team: undefined,
+            price: undefined,
+            isSold: false
+        });
+
+        res.json({
+            matched: result.matchedCount ?? result.nMatched ?? result.n,
+            modified: result.modifiedCount ?? result.nModified ?? result.n
+        });
+    } catch (err) {
+        console.error('Error in revertUnsoldCategoryToAvailable:', err);
+        res.status(500).json({ error: err.message });
+    }
+};
+
+// Move all UNSOLD1 players of a category back to UNSOLD within a tournament
+exports.revertUnsold1CategoryToUnsold = async (req, res) => {
+    try {
+        const { category, tournamentId } = req.body;
+        if (!category) {
+            return res.status(400).json({ error: 'category is required' });
+        }
+
+        const filter = {
+            status: 'unsold1',
+            category
+        };
+
+        if (tournamentId) {
+            filter.tournamentId = tournamentId;
+        } else if (req.user && req.user.role === 'auctioneer') {
+            const myTournament = await getAuctioneerTournament(req.user.email);
+            if (!myTournament) {
+                return res.status(403).json({ error: 'Forbidden: No tournament assigned to this auctioneer.' });
+            }
+            filter.tournamentId = myTournament._id;
+        } else {
+            return res.status(400).json({ error: 'tournamentId is required' });
+        }
+
+        const result = await PlayerTournament.updateMany(filter, {
+            status: 'unsold',
+            team: undefined,
+            price: undefined,
+            isSold: false
+        });
+
+        res.json({
+            matched: result.matchedCount ?? result.nMatched ?? result.n,
+            modified: result.modifiedCount ?? result.nModified ?? result.n
+        });
+    } catch (err) {
+        console.error('Error in revertUnsold1CategoryToUnsold:', err);
         res.status(500).json({ error: err.message });
     }
 };

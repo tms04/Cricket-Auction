@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
-import { Gavel, Menu, X } from 'lucide-react'; // Added Menu and X icons for mobile nav
+import { Gavel, Menu, X, IndianRupee, Users, Target, Calendar, Award, Home } from 'lucide-react';
 import Confetti from 'react-confetti';
 import * as api from '../api';
 import { io, Socket } from 'socket.io-client';
@@ -46,6 +46,7 @@ const TournamentPage: React.FC = () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const [teamPlayers, setTeamPlayers] = useState<{ [teamId: string]: any[] }>({});
     const [teamPlayersLoading, setTeamPlayersLoading] = useState<{ [teamId: string]: boolean }>({});
+    const tabRef = useRef<'live' | 'sold' | 'available' | 'unsold' | 'teams'>('live');
 
     useEffect(() => {
         if (!id) return;
@@ -69,14 +70,41 @@ const TournamentPage: React.FC = () => {
     }, [id, API_BASE]);
 
     useEffect(() => {
+        tabRef.current = tab;
+    }, [tab]);
+
+    useEffect(() => {
         if (!id || tab !== 'live') return;
         // Connect to the socket server
         const newSocket = io(API_BASE, { transports: ['websocket'] });
         setSocket(newSocket);
         // Listen for auction updates for this tournament
-        const eventName = `auction_update_${id}`;
-        newSocket.on(eventName, (auctionData) => {
-            // Animation logic for SOLD/UNSOLD
+        const updateEventName = `auction_update_${id}`;
+        const resultEventName = `auction_result_${id}`;
+
+        const fetchFreshAuction = async () => {
+            try {
+                const res = await fetch(`${API_BASE}/api/auctions/current?tournamentId=${id}&_=${Date.now()}`, {
+                    cache: 'no-store'
+                });
+                const data = await res.json();
+                setLiveAuction(data);
+                setPrevAuction(data);
+            } catch {
+                setLiveAuction(null);
+                setPrevAuction(null);
+            }
+        };
+
+        const clearCaches = async () => {
+            if ('caches' in window) {
+                const keys = await caches.keys();
+                await Promise.all(keys.map(k => caches.delete(k)));
+            }
+        };
+
+        newSocket.on(updateEventName, (auctionData) => {
+            // Animation logic for SOLD/UNSOLD driven by state change
             if (
                 prevAuction &&
                 prevAuction.status === 'active' &&
@@ -101,22 +129,48 @@ const TournamentPage: React.FC = () => {
             setPrevAuction(auctionData);
             setLiveAuction(auctionData);
         });
-        // Optionally: fetch current auction once on mount (in case no event yet)
-        fetch(`${API_BASE}/api/auctions/current?tournamentId=${id}`)
-            .then(res => res.json())
-            .then(data => {
-                setLiveAuction(data);
-                setPrevAuction(data);
-            })
-            .catch(() => {
-                setLiveAuction(null);
-                setPrevAuction(null);
-            });
+
+        newSocket.on(resultEventName, async (resultData) => {
+            try {
+                await clearCaches();
+            } catch {
+                // ignore cache clear failures
+            }
+
+            if (resultData?.status === 'sold') {
+                setShowSoldAnimation(true);
+                if (soldTimeoutRef.current) clearTimeout(soldTimeoutRef.current);
+                soldTimeoutRef.current = window.setTimeout(() => setShowSoldAnimation(false), 2500);
+            } else if (resultData?.status === 'unsold') {
+                setShowUnsoldAnimation(true);
+                if (soldTimeoutRef.current) clearTimeout(soldTimeoutRef.current);
+                soldTimeoutRef.current = window.setTimeout(() => setShowUnsoldAnimation(false), 2500);
+            }
+            setHadBid(false);
+            await fetchFreshAuction();
+            setLastUpdated(new Date());
+            // Force refresh of tab lists when on sold/unsold/available to avoid stale player rows
+            const currentTab = tabRef.current;
+            if (currentTab === 'available' || currentTab === 'sold' || currentTab === 'unsold') {
+                setTabPlayersLoading(true);
+                const status = currentTab;
+                fetch(`${API_BASE}/api/players?status=${status}&tournamentId=${tournament?.id}&_=${Date.now()}`, { cache: 'no-store' })
+                    .then(res => res.json())
+                    .then(playersObj => setTabPlayers(Array.isArray(playersObj.players) ? playersObj.players : []))
+                    .catch(() => setTabPlayers([]))
+                    .finally(() => setTabPlayersLoading(false));
+            }
+        });
+
+        // Fetch current auction once on mount (in case no event yet)
+        fetchFreshAuction();
+
         return () => {
-            newSocket.off(eventName);
+            newSocket.off(updateEventName);
+            newSocket.off(resultEventName);
             newSocket.disconnect();
         };
-    }, [id, API_BASE, tab, prevAuction, hadBid]);
+    }, [id, API_BASE, tab, prevAuction, hadBid, tournament?.id]);
 
     useEffect(() => {
         setLastUpdated(new Date());
@@ -234,28 +288,27 @@ const TournamentPage: React.FC = () => {
     const getLiveAuctionBid = (auction: any) => auction?.currentBid ?? auction?.bidAmount ?? '';
 
     // Helper to get card color classes based on primaryRole
-    const getCardColor = (role: string) => {
-        if (role === 'All-rounder') return 'from-yellow-300 via-yellow-100 to-yellow-400 border-yellow-400';
-        if (role === 'Batsman') return 'from-gray-200 via-gray-100 to-gray-400 border-gray-400';
-        if (role === 'Bowler') return 'from-amber-700 via-yellow-300 to-yellow-600 border-amber-700';
-        return 'from-gray-100 via-gray-50 to-gray-200 border-gray-200';
+    const getRoleColor = (role: string) => {
+        if (role === 'All-rounder') return 'bg-gradient-to-r from-yellow-400 to-orange-400';
+        if (role === 'Batsman') return 'bg-gradient-to-r from-blue-400 to-cyan-400';
+        if (role === 'Bowler') return 'bg-gradient-to-r from-red-400 to-pink-400';
+        if (role === 'Wicket-keeper') return 'bg-gradient-to-r from-green-400 to-emerald-400';
+        return 'bg-gradient-to-r from-gray-400 to-gray-300';
     };
 
-    // Remove useEffect that references fetchPlayers and fetchTeams
-    // useEffect(() => {
-    //     if (tab === 'sold') {
-    //         if (fetchPlayers) fetchPlayers();
-    //         if (fetchTeams) fetchTeams();
-    //     }
-    // }, [tab, fetchPlayers, fetchTeams]);
+    // Helper to get role icon
+    const getRoleIcon = (role: string) => {
+        if (role === 'All-rounder') return '⚡';
+        if (role === 'Batsman') return '🏏';
+        if (role === 'Bowler') return '🎯';
+        if (role === 'Wicket-keeper') return '🧤';
+        return '👤';
+    };
 
     // Close mobile nav when tab changes
     useEffect(() => {
         setIsMobileNavOpen(false);
     }, [tab]);
-
-    // Debug: Log players before rendering Sold Players
-    // console.log('Sold Players:', players.filter(p => p.status === 'sold'));
 
     if (loading) {
         return (
@@ -303,28 +356,28 @@ const TournamentPage: React.FC = () => {
                 </div>
             </div>
 
-            {/* Floating decorative elements - adjusted for mobile */}
+            {/* Floating decorative elements */}
             <div className="hidden sm:block absolute left-[8%] top-[18%] animate-float-1 z-10">
                 <div className="w-16 h-16 rounded-full bg-yellow-400/20 shadow-[0_0_40px_10px_rgba(255,215,0,0.15)] border-2 border-yellow-300/30"></div>
             </div>
             <div className="hidden sm:block absolute right-[12%] top-[30%] animate-float-2 z-10">
                 <div className="w-10 h-10 rounded-full bg-orange-400/20 shadow-[0_0_30px_8px_rgba(255,136,0,0.12)] border-2 border-orange-300/30"></div>
             </div>
-            {/* Cricket Bat SVG - adjusted for mobile */}
+            {/* Cricket Bat SVG */}
             <div className="hidden sm:block absolute left-[3%] bottom-[12%] z-10 animate-bat-float opacity-80">
                 <svg width="60" height="120" viewBox="0 0 60 120" fill="none" xmlns="http://www.w3.org/2000/svg">
                     <rect x="25" y="10" width="10" height="80" rx="5" fill="#eab308" stroke="#b45309" strokeWidth="3" />
                     <rect x="27" y="90" width="6" height="20" rx="3" fill="#b91c1c" stroke="#7f1d1d" strokeWidth="2" />
                 </svg>
             </div>
-            {/* Cricket Ball SVG - adjusted for mobile */}
+            {/* Cricket Ball SVG */}
             <div className="hidden sm:block absolute right-[6%] bottom-[18%] z-10 animate-ball-bounce opacity-90">
                 <svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
                     <circle cx="20" cy="20" r="16" fill="#dc2626" stroke="#fff" strokeWidth="3" />
                     <path d="M10 15 Q20 25 30 15" stroke="#fff" strokeWidth="2" />
                 </svg>
             </div>
-            {/* Cricket Stumps SVG - adjusted for mobile */}
+            {/* Cricket Stumps SVG */}
             <div className="hidden sm:block absolute right-[14%] top-[10%] z-10 animate-stumps-float opacity-80">
                 <svg width="48" height="70" viewBox="0 0 48 70" fill="none" xmlns="http://www.w3.org/2000/svg">
                     <rect x="8" y="10" width="6" height="50" rx="3" fill="#fbbf24" stroke="#92400e" strokeWidth="2" />
@@ -393,106 +446,244 @@ const TournamentPage: React.FC = () => {
                     <div className="relative bg-gradient-to-br from-[#232946]/80 to-[#1a223f]/80 backdrop-blur-xl rounded-2xl sm:rounded-3xl shadow-2xl p-4 sm:p-6 md:p-10 mb-8 sm:mb-10 border-4 border-yellow-400/60 ring-1 sm:ring-2 ring-yellow-300/30 ring-offset-1 sm:ring-offset-2 z-10">
                         {tab === 'live' && (
                             <div className="relative">
-                                <div className="text-xs text-gray-400 mb-2">Last updated: {lastUpdated ? lastUpdated.toLocaleTimeString() : '-'}</div>
+                                <div className="text-xs text-gray-400 mb-4 text-center md:text-left">
+                                    Last updated: {lastUpdated ? lastUpdated.toLocaleTimeString() : '-'}
+                                </div>
                                 {liveAuction ? (
-                                    <>
-                                        <div className="flex justify-center">
-                                            <div className={`relative bg-gradient-to-br rounded-2xl sm:rounded-[2.5rem] shadow-2xl border-4 w-full max-w-sm p-0 overflow-hidden ${getCardColor(liveAuctionPlayer?.primaryRole)}`} style={{ minHeight: '300px' }}>
-                                                {/* Top Row: Role, Team Logo */}
-                                                <div className="flex justify-between items-center px-4 sm:px-6 pt-4 sm:pt-6">
-                                                    <span className="bg-white/80 rounded-full px-2 sm:px-3 py-1 text-xs font-bold text-yellow-800 shadow">{liveAuctionPlayer?.primaryRole || '-'}</span>
-                                                    <div className="flex items-center gap-2">
+                                    <div className="flex flex-col lg:flex-row gap-6 lg:gap-8">
+                                        {/* Left Column - Player Photo with Name Info */}
+                                        <div className="lg:w-2/5">
+                                            <div className="relative bg-gradient-to-br from-yellow-400/10 via-orange-400/10 to-red-400/10 rounded-2xl p-4 sm:p-6 border-2 border-yellow-400/30 shadow-2xl">
+                                                {/* Role Badge */}
+                                                <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
+                                                    <div className={`px-4 py-1.5 rounded-full font-bold text-sm ${getRoleColor(liveAuctionPlayer?.primaryRole || '')} text-white shadow-lg flex items-center gap-2`}>
+                                                        <span className="text-lg">{getRoleIcon(liveAuctionPlayer?.primaryRole || '')}</span>
+                                                        {liveAuctionPlayer?.primaryRole || 'Player'}
                                                     </div>
                                                 </div>
+
                                                 {/* Player Photo */}
-                                                <div className="flex justify-center mt-2">
+                                                <div className="mt-6 flex justify-center">
                                                     {liveAuctionPlayer?.photo ? (
-                                                        <img
-                                                            src={liveAuctionPlayer.photo}
-                                                            alt={liveAuctionPlayer.name}
-                                                            className="object-contain max-w-[80vw] max-h-[45vh] w-auto border-4 border-yellow-300 shadow-xl rounded-xl"
-                                                            style={{ background: 'transparent' }}
-                                                        />
+                                                        <div className="relative group">
+                                                            <div className="absolute inset-0 bg-gradient-to-r from-yellow-400 to-orange-400 rounded-2xl blur-xl opacity-50 group-hover:opacity-70 transition-opacity"></div>
+                                                            <img
+                                                                src={liveAuctionPlayer.photo}
+                                                                alt={liveAuctionPlayer.name}
+                                                                className="relative w-full max-w-md h-[280px] object-cover rounded-xl border-4 border-yellow-300/80 shadow-2xl transform group-hover:scale-[1.02] transition-transform duration-300"
+                                                                style={{ background: 'transparent' }}
+                                                            />
+                                                        </div>
                                                     ) : (
-                                                        <div className="flex items-center justify-center max-w-[80vw] max-h-[45vh] w-[32vw] h-[40vh] sm:w-[28vw] sm:h-[38vh] md:w-[24vw] md:h-[36vh] bg-yellow-100 text-5xl sm:text-6xl font-extrabold text-yellow-700 border-4 border-yellow-300 shadow-xl rounded-xl">
-                                                            {liveAuctionPlayer?.name?.[0] || '?'}
+                                                        <div className="flex items-center justify-center w-full h-[280px] bg-gradient-to-br from-yellow-100 to-orange-100 rounded-2xl border-4 border-yellow-300 shadow-2xl">
+                                                            <div className="text-center">
+                                                                <div className="text-8xl font-extrabold text-yellow-700 mb-2">
+                                                                    {liveAuctionPlayer?.name?.[0] || '?'}
+                                                                </div>
+                                                            </div>
                                                         </div>
                                                     )}
                                                 </div>
-                                                {/* Player Name */}
-                                                <div className="text-center mt-2 sm:mt-4">
-                                                    <h2 className="text-xl sm:text-2xl font-extrabold text-gray-900">{liveAuctionPlayer ? liveAuctionPlayer.name : '-'}</h2>
-                                                    <div className="text-base sm:text-lg font-bold text-yellow-900 mt-1">
-                                                        <div><span className="font-bold">Current Bid:</span> <span className="text-gray-900">₹{liveAuctionPlayer ? getLiveAuctionBid(liveAuction) : '-'}</span></div>
-                                                        <div><span className="font-bold">Current Bidder:</span> <span className="text-gray-900 font-bold">{currentBidderTeam ? currentBidderTeam : "-"}</span></div>
+
+                                                {/* Name and Former Team Info (Desktop only) */}
+                                                <div className="hidden lg:block mt-6">
+                                                    <div className="text-center">
+                                                        <h2 className="text-3xl font-extrabold text-white mb-3 drop-shadow-lg">
+                                                            {liveAuctionPlayer ? liveAuctionPlayer.name : '-'}
+                                                        </h2>
+                                                        {liveAuctionPlayer?.previousYearTeam && (
+                                                            <div className="bg-gradient-to-r from-blue-500/20 to-cyan-500/20 rounded-xl p-4 border border-blue-400/30">
+                                                                <div className="flex items-center justify-center gap-3">
+                                                                    <Home className="w-5 h-5 text-blue-300" />
+                                                                    <div>
+                                                                        <div className="text-sm text-blue-300">Former Team</div>
+                                                                        <div className="text-lg font-bold text-white">{liveAuctionPlayer.previousYearTeam}</div>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 </div>
-                                                {/* Info Grid */}
-                                                <div className="grid grid-cols-2 gap-x-2 sm:gap-x-4 gap-y-1 px-4 sm:px-6 md:px-8 mt-2 sm:mt-4 text-xs sm:text-sm">
-                                                    <div>Base Price: ₹{liveAuctionPlayer?.basePrice ?? '-'}</div>
-                                                    <div><span className="font-semibold text-gray-700">Station:</span> <span className="text-gray-900">{liveAuctionPlayer?.station || '-'}</span></div>
-                                                    <div><span className="font-semibold text-gray-700">Previous Team:</span> <span className="text-gray-900">{liveAuctionPlayer?.previousYearTeam || '-'}</span></div>
-                                                    <div><span className="font-semibold text-gray-700">Age:</span> <span className="text-gray-900">{liveAuctionPlayer?.age || '-'}</span></div>
+
+                                                {/* Mobile View - Name and Former Team */}
+                                                <div className="lg:hidden mt-6 text-center">
+                                                    <h2 className="text-2xl font-extrabold text-white mb-2">
+                                                        {liveAuctionPlayer ? liveAuctionPlayer.name : '-'}
+                                                    </h2>
+                                                    {liveAuctionPlayer?.previousYearTeam && (
+                                                        <div className="text-lg font-bold text-yellow-300">
+                                                            Formerly: {liveAuctionPlayer.previousYearTeam}
+                                                        </div>
+                                                    )}
                                                 </div>
-                                                {/* Stats Box */}
-                                                <div className="bottom-0 left-0 w-full bg-yellow-200/80 py-2 sm:py-3 flex justify-around items-center border-t-2 border-yellow-400">
-                                                    <div className="text-center">
-                                                        <div className="text-sm sm:text-base md:text-lg font-bold text-yellow-900">{liveAuctionPlayer?.battingStyle || '-'}</div>
-                                                        <div className="text-xs text-yellow-800">BATTING STYLE</div>
+                                            </div>
+                                        </div>
+
+                                        {/* Right Column - Player Info */}
+                                        <div className="lg:w-3/5">
+                                            <div className="bg-gradient-to-br from-[#2d3566]/90 to-[#1a223f]/90 rounded-2xl p-6 border-2 border-yellow-400/30 shadow-2xl h-full">
+                                                {/* Current Bid Section */}
+                                                <div className="mb-6">
+                                                    <div className="bg-gradient-to-r from-yellow-500/20 to-orange-500/20 rounded-xl p-6 border-2 border-yellow-400/40">
+                                                        <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+                                                            <div className="text-center md:text-left">
+                                                                <div className="text-sm text-yellow-300 font-semibold mb-1">CURRENT BID</div>
+                                                                <div className="text-4xl font-bold text-white flex items-center gap-2">
+                                                                    <IndianRupee className="w-7 h-7 text-yellow-400" />
+                                                                    {liveAuctionPlayer ? getLiveAuctionBid(liveAuction) : '-'}
+                                                                </div>
+                                                            </div>
+                                                            <div className="text-center md:text-right">
+                                                                <div className="text-sm text-yellow-300 font-semibold mb-1">LEADING BIDDER</div>
+                                                                <div className="text-2xl font-bold text-white flex items-center justify-center md:justify-end gap-2">
+                                                                    <Users className="w-5 h-5 text-green-400" />
+                                                                    {currentBidderTeam || "No Bids Yet"}
+                                                                </div>
+                                                            </div>
+                                                        </div>
                                                     </div>
+                                                </div>
+
+                                                {/* Stats Grid - Compact Layout */}
+                                                <div className="grid grid-cols-2 gap-3 mb-4">
+                                                    <div className="bg-gradient-to-br from-blue-500/10 to-cyan-500/10 rounded-xl p-3 border border-blue-400/30">
+                                                        <div className="flex items-center gap-2">
+                                                            <div className="bg-blue-500/20 p-2 rounded-lg">
+                                                                <Target className="w-4 h-4 text-blue-400" />
+                                                            </div>
+                                                            <div>
+                                                                <div className="text-xs text-blue-300">Base Price</div>
+                                                                <div className="text-lg font-bold text-white">₹{liveAuctionPlayer?.basePrice ?? '-'}</div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="bg-gradient-to-br from-green-500/10 to-emerald-500/10 rounded-xl p-3 border border-green-400/30">
+                                                        <div className="flex items-center gap-2">
+                                                            <div className="bg-green-500/20 p-2 rounded-lg">
+                                                                <Calendar className="w-4 h-4 text-green-400" />
+                                                            </div>
+                                                            <div>
+                                                                <div className="text-xs text-green-300">Age</div>
+                                                                <div className="text-lg font-bold text-white">{liveAuctionPlayer?.age || '-'}</div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="bg-gradient-to-br from-purple-500/10 to-pink-500/10 rounded-xl p-3 border border-purple-400/30">
+                                                        <div className="flex items-center gap-2">
+                                                            <div className="bg-purple-500/20 p-2 rounded-lg">
+                                                                <Award className="w-4 h-4 text-purple-400" />
+                                                            </div>
+                                                            <div>
+                                                                <div className="text-xs text-purple-300">Station</div>
+                                                                <div className="text-lg font-bold text-white">{liveAuctionPlayer?.station || '-'}</div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="bg-gradient-to-br from-red-500/10 to-orange-500/10 rounded-xl p-3 border border-red-400/30">
+                                                        <div className="flex items-center gap-2">
+                                                            <div className="bg-red-500/20 p-2 rounded-lg">
+                                                                <span className="text-sm">🏏</span>
+                                                            </div>
+                                                            <div>
+                                                                <div className="text-xs text-red-300">Batting</div>
+                                                                <div className="text-lg font-bold text-white">{liveAuctionPlayer?.battingStyle || '-'}</div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                {/* Style Info */}
+                                                <div className="grid grid-cols-2 gap-3 mb-4">
+                                                    <div className="bg-gradient-to-br from-yellow-500/10 to-amber-500/10 rounded-xl p-3 border border-yellow-400/30">
+                                                        <div className="text-center">
+                                                            <div className="text-xs text-yellow-300 mb-1">BOWLING STYLE</div>
+                                                            <div className="text-md font-bold text-white">{liveAuctionPlayer?.bowlingStyle || '-'}</div>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="bg-gradient-to-br from-gray-500/10 to-gray-400/10 rounded-xl p-3 border border-gray-400/30">
+                                                        <div className="text-center">
+                                                            <div className="text-xs text-gray-300 mb-1">PLAYING ROLE</div>
+                                                            <div className="text-md font-bold text-white">{liveAuctionPlayer?.primaryRole || '-'}</div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                {/* Bid Status Bar */}
+                                                <div className="mt-6 p-3 bg-gradient-to-r from-yellow-500/10 via-orange-500/10 to-red-500/10 rounded-xl border border-yellow-400/30">
                                                     <div className="text-center">
-                                                        <div className="text-sm sm:text-base md:text-lg font-bold text-yellow-900">{liveAuctionPlayer?.bowlingStyle || '-'}</div>
-                                                        <div className="text-xs text-yellow-800">BOWLING STYLE</div>
+                                                        <div className="text-sm text-yellow-300 mb-1">AUCTION STATUS</div>
+                                                        <div className="text-lg font-bold text-white">
+                                                            {currentBidderTeam ? 'ACTIVE BIDDING' : 'WAITING FOR FIRST BID'}
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </div>
                                         </div>
-                                        {/* Audience Reaction Row */}
-                                        <div className="flex justify-center mt-4 sm:mt-6 gap-2 animate-fade-in-up">
-                                            <span className="text-xl sm:text-2xl animate-bounce">👏</span>
-                                            <span className="text-xl sm:text-2xl animate-pulse">😮</span>
-                                            <span className="text-xl sm:text-2xl animate-bounce">🎉</span>
-                                            <span className="text-xl sm:text-2xl animate-pulse">🔥</span>
-                                        </div>
-                                    </>
+                                    </div>
                                 ) : (
-                                    <div className="text-gray-500 text-center py-8">No player on the auction table at the moment.</div>
+                                    <div className="text-center py-12">
+                                        <div className="text-6xl mb-4">⏳</div>
+                                        <h3 className="text-2xl font-bold text-gray-300 mb-2">Waiting for next player</h3>
+                                        <p className="text-gray-400">No player on the auction table at the moment.</p>
+                                    </div>
                                 )}
+
+                                {/* Audience Reaction Row */}
+                                <div className="flex justify-center mt-4 gap-2 animate-fade-in-up">
+                                    <span className="text-xl sm:text-2xl animate-bounce">👏</span>
+                                    <span className="text-xl sm:text-2xl animate-pulse delay-100">😮</span>
+                                    <span className="text-xl sm:text-2xl animate-bounce delay-200">🎉</span>
+                                    <span className="text-xl sm:text-2xl animate-pulse delay-300">🔥</span>
+                                </div>
+
                                 {/* SOLD Animation Overlay */}
                                 {showSoldAnimation && (
                                     <div className="absolute inset-0 flex items-center justify-center z-50 pointer-events-none">
-                                        {/* Dimmed background */}
-                                        <div className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity duration-500" style={{ opacity: showSoldAnimation ? 1 : 0 }}></div>
-                                        {/* Animation overlay with fade-in/fade-out */}
+                                        <div className="absolute inset-0 bg-black/70 backdrop-blur-sm transition-opacity duration-500" style={{ opacity: showSoldAnimation ? 1 : 0 }}></div>
                                         <div className={`relative transition-opacity duration-700 ${showSoldAnimation ? 'opacity-100 animate-fade-in-scale' : 'opacity-0'}`}
                                             style={{ pointerEvents: 'auto' }}>
-                                            <Confetti width={window.innerWidth} height={window.innerHeight} numberOfPieces={250} recycle={false} />
-                                            <div className="bg-white/90 rounded-2xl sm:rounded-[2.5rem] w-full max-w-sm h-[360px] sm:h-[480px] flex flex-col items-center justify-center border-4 border-emerald-400 shadow-2xl relative">
-                                                <Gavel className="w-12 sm:w-16 h-12 sm:h-16 text-yellow-500 mb-4 animate-gavel-slam" />
-                                                <span className="text-4xl sm:text-5xl md:text-6xl font-extrabold text-emerald-600 drop-shadow-lg animate-pulse">SOLD!</span>
-                                                <span className="mt-2 sm:mt-4 text-xl sm:text-2xl font-bold text-emerald-700 animate-fade-in">Player Sold</span>
+                                            <Confetti width={window.innerWidth} height={window.innerHeight} numberOfPieces={300} recycle={false} />
+                                            <div className="bg-gradient-to-br from-emerald-500/90 to-green-400/90 rounded-3xl w-full max-w-2xl h-[400px] flex flex-col items-center justify-center border-4 border-emerald-400 shadow-2xl relative">
+                                                <div className="absolute -top-8">
+                                                    <Gavel className="w-16 h-16 text-yellow-300 mb-4 animate-gavel-slam drop-shadow-2xl" />
+                                                </div>
+                                                <span className="text-6xl font-extrabold text-white drop-shadow-2xl animate-pulse">SOLD!</span>
+                                                <span className="mt-4 text-2xl font-bold text-white animate-fade-in">Player Sold Successfully</span>
+                                                <div className="mt-6 text-lg text-emerald-100">
+                                                    {currentBidderTeam && `To: ${currentBidderTeam}`}
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
                                 )}
+
                                 {/* UNSOLD Animation Overlay */}
                                 {showUnsoldAnimation && (
                                     <div className="absolute inset-0 flex items-center justify-center z-50 pointer-events-none">
-                                        {/* Dimmed background */}
-                                        <div className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity duration-500" style={{ opacity: showUnsoldAnimation ? 1 : 0 }}></div>
-                                        {/* Animation overlay with fade-in/fade-out */}
+                                        <div className="absolute inset-0 bg-black/70 backdrop-blur-sm transition-opacity duration-500" style={{ opacity: showUnsoldAnimation ? 1 : 0 }}></div>
                                         <div className={`relative transition-opacity duration-700 ${showUnsoldAnimation ? 'opacity-100 animate-fade-in-scale' : 'opacity-0'}`}
                                             style={{ pointerEvents: 'auto' }}>
-                                            <div className="bg-white/90 rounded-2xl sm:rounded-[2.5rem] w-full max-w-sm h-[360px] sm:h-[480px] flex flex-col items-center justify-center border-4 border-red-400 shadow-2xl relative">
-                                                <Gavel className="w-12 sm:w-16 h-12 sm:h-16 text-red-500 mb-4 animate-gavel-slam" />
-                                                <span className="text-4xl sm:text-5xl md:text-6xl font-extrabold text-red-600 drop-shadow-lg animate-pulse">UNSOLD!</span>
-                                                <span className="mt-2 sm:mt-4 text-xl sm:text-2xl font-bold text-red-700 animate-fade-in">Player Unsold</span>
+                                            <div className="bg-gradient-to-br from-red-500/90 to-orange-400/90 rounded-3xl w-full max-w-2xl h-[400px] flex flex-col items-center justify-center border-4 border-red-400 shadow-2xl relative">
+                                                <div className="absolute -top-8">
+                                                    <Gavel className="w-16 h-16 text-gray-300 mb-4 animate-gavel-slam drop-shadow-2xl" />
+                                                </div>
+                                                <span className="text-6xl font-extrabold text-white drop-shadow-2xl animate-pulse">UNSOLD!</span>
+                                                <span className="mt-4 text-2xl font-bold text-white animate-fade-in">Player Remains Unsold</span>
+                                                <div className="mt-6 text-lg text-red-100">
+                                                    No bids received
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
                                 )}
                             </div>
                         )}
+
+                        {/* Other tabs remain the same */}
                         {tab === 'available' && (
                             <div className="relative">
                                 <div className="text-xs text-gray-500 mb-4 flex justify-between items-center">
@@ -542,6 +733,7 @@ const TournamentPage: React.FC = () => {
                                 )}
                             </div>
                         )}
+
                         {tab === 'sold' && (
                             <div className="relative">
                                 <div className="text-xs text-gray-500 mb-4 flex justify-between items-center">
@@ -564,16 +756,13 @@ const TournamentPage: React.FC = () => {
                                                 className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-300 group"
                                             >
                                                 <div className="bg-gradient-to-r from-red-50 to-red-100 p-5 text-center relative">
-                                                    {/* Sold badge */}
                                                     <div className="absolute top-2 right-2 bg-red-600 text-white text-xs font-bold px-2 py-1 rounded-full">
                                                         SOLD
                                                     </div>
-
                                                     <h3 className="font-bold text-xl text-gray-800 m-2 group-hover:text-red-600 transition-colors">
                                                         {player.name}
                                                     </h3>
                                                     <div className="w-16 h-1 bg-red-300 mx-auto mb-3 rounded-full"></div>
-
                                                     <div className="space-y-3">
                                                         <div className="flex justify-between items-center bg-white rounded-lg p-3 shadow-inner">
                                                             <div className="text-left">
@@ -585,21 +774,19 @@ const TournamentPage: React.FC = () => {
                                                                 <p className="text-lg font-bold text-red-600">₹{player.price ?? '-'}</p>
                                                             </div>
                                                         </div>
-
                                                         <div className="bg-white rounded-lg p-3 shadow-inner">
                                                             <p className="text-xs text-gray-500 font-medium">Team</p>
                                                             <p className="text-sm font-semibold text-gray-800 truncate">{player.teamName ?? '-'}</p>
                                                         </div>
                                                     </div>
                                                 </div>
-
-
                                             </div>
                                         ))}
                                     </div>
                                 )}
                             </div>
                         )}
+
                         {tab === 'unsold' && (
                             <div className="relative">
                                 <div className="text-xs text-gray-500 mb-4 flex justify-between items-center">
@@ -622,16 +809,14 @@ const TournamentPage: React.FC = () => {
                                                 className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-300 group"
                                             >
                                                 <div className="bg-gradient-to-r from-gray-50 to-gray-100 p-5 text-center relative">
-                                                    {/* Unsold badge */}
-                                                    <div className="absolute top-2 right-2 bg-gray-600 text-white text-xs font-bold px-2 py-1 rounded-full">
-                                                        UNSOLD
+                                                    <div className={`absolute top-2 right-2 text-white text-xs font-bold px-2 py-1 rounded-full ${player.status === 'unsold1' ? 'bg-gray-600' : 'bg-gray-600'
+                                                        }`}>
+                                                        {player.status === 'unsold1' ? 'UNSOLD' : 'UNSOLD'}
                                                     </div>
-
                                                     <h3 className="font-bold text-xl text-gray-700 m-2 group-hover:text-gray-800 transition-colors">
                                                         {player.name}
                                                     </h3>
                                                     <div className="w-16 h-1 bg-gray-300 mx-auto mb-3 rounded-full"></div>
-
                                                     <div className="bg-white rounded-lg p-4 shadow-inner">
                                                         <div className="flex flex-col items-center">
                                                             <p className="text-xs text-gray-500 font-medium mb-1">Base Price</p>
@@ -645,6 +830,7 @@ const TournamentPage: React.FC = () => {
                                 )}
                             </div>
                         )}
+
                         {tab === 'teams' && (
                             <div className="relative">
                                 <div className="flex justify-between items-center mb-4">
@@ -681,7 +867,6 @@ const TournamentPage: React.FC = () => {
                                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                                         {teams.map(team => (
                                             <div key={team._id} className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow">
-                                                {/* Team Header */}
                                                 <div className="bg-gradient-to-r from-blue-50 to-blue-100 p-5 flex items-center gap-4">
                                                     {team.logo && (
                                                         <div className="flex-shrink-0">
@@ -696,14 +881,9 @@ const TournamentPage: React.FC = () => {
                                                         </div>
                                                     </div>
                                                 </div>
-
-                                                {/* Team Content */}
                                                 <div className="p-4">
                                                     <button
-                                                        onClick={() => {
-                                                            console.log('Button clicked for teamId:', team._id);
-                                                            handleExpandTeam(team._id);
-                                                        }}
+                                                        onClick={() => handleExpandTeam(team._id)}
                                                         className="w-full flex items-center justify-between py-2 px-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors"
                                                     >
                                                         <span className="text-sm font-medium text-gray-700">
@@ -718,7 +898,6 @@ const TournamentPage: React.FC = () => {
                                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                                                         </svg>
                                                     </button>
-
                                                     {expandedTeamId === team._id && (
                                                         <div className="mt-4 space-y-3">
                                                             {teamPlayersLoading[team._id] ? (
@@ -748,9 +927,6 @@ const TournamentPage: React.FC = () => {
                                                         </div>
                                                     )}
                                                 </div>
-
-                                                {/* Team Footer */}
-
                                             </div>
                                         ))}
                                     </div>

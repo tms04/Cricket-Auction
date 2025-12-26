@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const Auction = require('../models/auction');
 const Tournament = require('../models/tournament');
 const Team = require('../models/team');
@@ -157,6 +158,11 @@ exports.completeAuction = async (req, res) => {
         console.time("completeAuction_total");
         const { auctionId, winnerId, finalAmount } = req.body;
 
+        // Validate auctionId to avoid CastError
+        if (!auctionId || !mongoose.Types.ObjectId.isValid(auctionId)) {
+            return res.status(400).json({ error: 'Invalid auction id' });
+        }
+
         console.time("findAuction");
         const auction = await Auction.findById(auctionId);
         console.timeEnd("findAuction");
@@ -204,7 +210,16 @@ exports.completeAuction = async (req, res) => {
             auction.bidAmount = saleAmount;
         } else {
             // Player went unsold
-            participation.status = 'unsold';
+            // First time unsold: available -> unsold
+            // Second time unsold (already unsold) -> unsold1 bucket
+            const currentStatus = participation.status;
+            if (currentStatus === 'unsold') {
+                participation.status = 'unsold1';
+            } else if (currentStatus === 'unsold1') {
+                participation.status = 'unsold1';
+            } else {
+                participation.status = 'unsold';
+            }
             participation.isSold = false;
             participation.team = undefined;
             participation.price = undefined;
@@ -221,6 +236,13 @@ exports.completeAuction = async (req, res) => {
         const io = req.app.get('io');
         if (io && auction.tournamentId) {
             io.emit(`auction_update_${auction.tournamentId}`, auction);
+            // Emit a lightweight result event so viewers can react deterministically
+            io.emit(`auction_result_${auction.tournamentId}`, {
+                playerId: auction.player ? String(auction.player) : undefined,
+                status: auction.status,
+                winnerName: auction.winnerName,
+                finalAmount: auction.finalAmount ?? auction.bidAmount
+            });
         }
 
         const auctionObj = auction.toObject ? auction.toObject() : auction;

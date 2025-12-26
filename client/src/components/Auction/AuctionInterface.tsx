@@ -32,7 +32,8 @@ const AuctionInterface: React.FC = () => {
     startAuction,
     placeBid,
     completeAuction,
-    resetPlayerStatuses
+    resetPlayerStatuses,
+    fetchPlayers
   } = useApp();
   const { user } = useAuth();
 
@@ -44,6 +45,7 @@ const AuctionInterface: React.FC = () => {
   const [selectedTeam, setSelectedTeam] = useState('');
   const [notification, setNotification] = useState<{ type: 'success' | 'error' | 'info', message: string } | null>(null);
   const [showPlayerSelection, setShowPlayerSelection] = useState(false);
+  const [showRandomSelector, setShowRandomSelector] = useState(false);
   const [lastSelectedPlayerId, setLastSelectedPlayerId] = useState<string | null>(null);
   const prevAuctionId = useRef<string | null>(null);
   const basePriceRef = useRef(0);
@@ -66,6 +68,11 @@ const AuctionInterface: React.FC = () => {
     ),
     [players, myTournament?.id]
   );
+  const categoryOptions = useMemo(() => {
+    const fromTournament = (myTournament?.categories ?? []).map(c => c.category).filter(Boolean);
+    const fromPlayers = players.map(p => p.category).filter(Boolean) as string[];
+    return Array.from(new Set([...fromTournament, ...fromPlayers])).sort();
+  }, [myTournament?.categories, players]);
 
   // Show notification helper
   const showNotification = useCallback((type: 'success' | 'error' | 'info', message: string) => {
@@ -76,6 +83,10 @@ const AuctionInterface: React.FC = () => {
   // Function to cancel the current auction and prompt reselection
   const cancelCurrentAuction = useCallback(async () => {
     if (activeAuction) {
+      if (!isValidObjectId(String(activeAuction.id))) {
+        showNotification('error', 'Invalid auction id; cannot cancel current auction.');
+        return;
+      }
       await completeAuction(activeAuction.id);
       showNotification('info', 'Previous auction could not be restored and was canceled. Please select the player again.');
       setShowPlayerSelection(true);
@@ -96,7 +107,7 @@ const AuctionInterface: React.FC = () => {
 
     const auctionId = String(activeAuction.id);
     const playerId = activeAuction.playerId;
-    if (!playerId || !isValidObjectId(playerId)) {
+    if (!playerId) {
       cancelCurrentAuction();
       setCurrentPlayer(null);
       return;
@@ -132,25 +143,45 @@ const AuctionInterface: React.FC = () => {
     }
   }, [activeAuction, players, cancelCurrentAuction, myTournament?.id]);
 
-  const getRandomPlayer = () => {
-    if (availablePlayers.length === 0) return null;
-    const randomIndex = Math.floor(Math.random() * availablePlayers.length);
-    return availablePlayers[randomIndex];
-  };
+  type RandomStatus = 'available' | 'unsold' | 'unsold1';
 
-  const startRandomAuction = async () => {
-    const randomPlayer = getRandomPlayer();
-    if (randomPlayer) {
+  const filterPlayersForRandom = useCallback(
+    (category: string, status: RandomStatus) => {
+      const targetCategory = category.toLowerCase();
+      return players.filter(p =>
+        p.tournamentId === myTournament?.id &&
+        (p.category ?? '').toLowerCase() === targetCategory &&
+        p.status === status
+      );
+    },
+    [players, myTournament?.id]
+  );
+
+  const startRandomAuctionWithFilter = useCallback(
+    async (category: string, status: RandomStatus) => {
+      const pool = filterPlayersForRandom(category, status);
+      if (!pool.length) {
+        showNotification('error', `No ${status} players found in Category ${category}`);
+        return;
+      }
+      const randomIndex = Math.floor(Math.random() * pool.length);
+      const randomPlayer = pool[randomIndex];
+      setLastSelectedPlayerId(randomPlayer.id);
       const auction = await startAuction(randomPlayer.id);
       if (auction) {
-        showNotification('info', `Auction started for ${randomPlayer.name}`);
+        showNotification('info', `Auction started for ${randomPlayer.name} (${category} - ${status})`);
+        setShowRandomSelector(false);
       } else {
         showNotification('error', 'Failed to start auction');
       }
-    } else {
-      showNotification('error', 'No available players for auction');
-    }
-  };
+    },
+    [filterPlayersForRandom, showNotification, startAuction]
+  );
+
+  const getPoolCount = useCallback(
+    (category: string, status: RandomStatus) => filterPlayersForRandom(category, status).length,
+    [filterPlayersForRandom]
+  );
 
   const startSelectedPlayerAuction = async (playerId: string) => {
     setLastSelectedPlayerId(playerId);
@@ -170,6 +201,10 @@ const AuctionInterface: React.FC = () => {
 
   const handleAuctionEnd = async (sold: boolean) => {
     if (!activeAuction) return;
+    if (!isValidObjectId(String(activeAuction.id))) {
+      showNotification('error', 'Invalid auction id. Please restart the auction.');
+      return;
+    }
 
     try {
       let success = false;
@@ -224,6 +259,38 @@ const AuctionInterface: React.FC = () => {
         showNotification('error', error.message || 'Failed to delete all auctions');
       } else {
         showNotification('error', 'Failed to delete all auctions');
+      }
+    }
+  };
+
+  const handleRevertUnsold1Category = async (category: string) => {
+    const confirmRevert = window.confirm(`Move all "${category}" UNSOLD1 players back to UNSOLD?`);
+    if (!confirmRevert) return;
+    try {
+      const result = await api.revertUnsold1Category(category, myTournament?.id);
+      showNotification('success', `Moved ${result.modified} player(s) from Unsold1 to Unsold`);
+      await fetchPlayers?.();
+    } catch (error) {
+      if (error instanceof Error) {
+        showNotification('error', error.message || 'Failed to move players');
+      } else {
+        showNotification('error', 'Failed to move players');
+      }
+    }
+  };
+
+  const handleRevertUnsoldCategory = async (category: string) => {
+    const confirmRevert = window.confirm(`Revert all "${category}" UNSOLD players back to AVAILABLE?`);
+    if (!confirmRevert) return;
+    try {
+      const result = await api.revertUnsoldCategory(category, myTournament?.id);
+      showNotification('success', `Reverted ${result.modified} player(s) to available`);
+      await fetchPlayers();
+    } catch (error) {
+      if (error instanceof Error) {
+        showNotification('error', error.message || 'Failed to revert players');
+      } else {
+        showNotification('error', 'Failed to revert players');
       }
     }
   };
@@ -351,7 +418,7 @@ const AuctionInterface: React.FC = () => {
             {auctionStatus === 'idle' && (
               <>
                 <button
-                  onClick={startRandomAuction}
+                  onClick={() => setShowRandomSelector(true)}
                   disabled={availablePlayers.length === 0}
                   className="flex items-center space-x-2 bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
@@ -421,6 +488,82 @@ const AuctionInterface: React.FC = () => {
               <div className="text-center py-8">
                 <User className="w-12 h-12 text-gray-400 mx-auto mb-2" />
                 <p className="text-gray-600">No available players for auction</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Random Category Selector */}
+      {showRandomSelector && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl p-6 w-full max-w-3xl max-h-[80vh] overflow-y-auto space-y-4">
+            <div className="flex justify-between items-center">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">Start Random Auction</h3>
+                <p className="text-sm text-gray-600">Pick a category and status to draw a random player.</p>
+              </div>
+              <button
+                onClick={() => setShowRandomSelector(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <XCircle className="w-6 h-6" />
+              </button>
+            </div>
+            {categoryOptions.length === 0 ? (
+              <div className="text-center text-gray-600 py-6">
+                No categories found for this tournament.
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {categoryOptions.map(category => (
+                  <div key={category} className="border border-gray-200 rounded-lg p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h4 className="font-semibold text-gray-900">Category {category}</h4>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      {(['available', 'unsold', 'unsold1'] as RandomStatus[]).map(status => {
+                        const poolCount = getPoolCount(category, status);
+                        const label =
+                          status === 'available'
+                            ? 'Available'
+                            : status === 'unsold'
+                              ? 'Unsold'
+                              : 'Unsold1';
+                        return (
+                          <div key={status} className="flex flex-col">
+                            <button
+                              onClick={() => startRandomAuctionWithFilter(category, status)}
+                              disabled={poolCount === 0}
+                              className="flex flex-col items-start border border-gray-200 rounded-lg px-3 py-2 hover:border-emerald-500 hover:bg-emerald-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              <span className="font-medium text-gray-900">{label}</span>
+                              <span className="text-xs text-gray-600">{poolCount} players</span>
+                            </button>
+                            {status === 'unsold' && (
+                              <button
+                                onClick={() => handleRevertUnsoldCategory(category)}
+                                disabled={poolCount === 0}
+                                className="mt-2 text-xs text-left text-blue-600 hover:text-blue-800 disabled:text-gray-400 disabled:cursor-not-allowed"
+                              >
+                                Revert Unsold → Available
+                              </button>
+                            )}
+                            {status === 'unsold1' && (
+                              <button
+                                onClick={() => handleRevertUnsold1Category(category)}
+                                disabled={poolCount === 0}
+                                className="mt-2 text-xs text-left text-purple-600 hover:text-purple-800 disabled:text-gray-400 disabled:cursor-not-allowed"
+                              >
+                                Move Unsold1 → Unsold
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </div>

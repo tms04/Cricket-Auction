@@ -8,7 +8,8 @@ const playerTournamentSchema = new mongoose.Schema({
     basePrice: { type: Number },
     isSold: { type: Boolean, default: false },
     previousYearTeam: { type: String },
-    status: { type: String, enum: ['available', 'sold', 'unsold'], default: 'available' },
+    // status: available -> in pool, sold -> bought, unsold -> first unsold round, unsold1 -> second-round unsold
+    status: { type: String, enum: ['available', 'sold', 'unsold', 'unsold1'], default: 'available' },
     category: { type: String },
 }, {
     timestamps: true

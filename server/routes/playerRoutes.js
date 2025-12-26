@@ -7,6 +7,8 @@ const optionalAuth = require('../middleware/optionalAuth');
 
 router.get('/', optionalAuth, playerController.getAllPlayers);
 router.post('/markUnsold', authMiddleware, roleMiddleware(['auctioneer', 'master']), playerController.markUnsold);
+router.post('/revertUnsoldCategory', authMiddleware, roleMiddleware(['auctioneer', 'master']), playerController.revertUnsoldCategoryToAvailable);
+router.post('/revertUnsold1Category', authMiddleware, roleMiddleware(['auctioneer', 'master']), playerController.revertUnsold1CategoryToUnsold);
 router.get('/duplicates/check', authMiddleware, roleMiddleware(['master', 'auctioneer']), playerController.checkDuplicatePlayerName);
 router.get('/summaries', optionalAuth, playerController.getPlayerSummaries);
 router.get('/:id', optionalAuth, playerController.getPlayer);
