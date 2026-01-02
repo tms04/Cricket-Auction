@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
-import { Gavel, Menu, X, IndianRupee, Users, Target, Calendar, Award, Home } from 'lucide-react';
+import { Gavel, Menu, X, IndianRupee, Users, Target, Calendar, Award, Home, User } from 'lucide-react';
 import Confetti from 'react-confetti';
 import * as api from '../api';
 import { io, Socket } from 'socket.io-client';
+import { getOptimizedImageUrl } from '../utils/cloudinary';
 
 interface TournamentMinimal {
     id: string;
@@ -46,6 +47,8 @@ const TournamentPage: React.FC = () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const [teamPlayers, setTeamPlayers] = useState<{ [teamId: string]: any[] }>({});
     const [teamPlayersLoading, setTeamPlayersLoading] = useState<{ [teamId: string]: boolean }>({});
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const [tournamentDetails, setTournamentDetails] = useState<any>(null);
     const tabRef = useRef<'live' | 'sold' | 'available' | 'unsold' | 'teams'>('live');
 
     useEffect(() => {
@@ -61,11 +64,17 @@ const TournamentPage: React.FC = () => {
                         status: data.status,
                         logo: data.logo || data.photo || undefined,
                     });
+                    // Store full tournament details for Max Bid calculation
+                    setTournamentDetails(data);
                 } else {
                     setTournament(null);
+                    setTournamentDetails(null);
                 }
             })
-            .catch(() => setTournament(null))
+            .catch(() => {
+                setTournament(null);
+                setTournamentDetails(null);
+            })
             .finally(() => setLoading(false));
     }, [id, API_BASE]);
 
@@ -813,6 +822,21 @@ const TournamentPage: React.FC = () => {
                                                         }`}>
                                                         {player.status === 'unsold1' ? 'UNSOLD' : 'UNSOLD'}
                                                     </div>
+                                                    {/* Player Photo */}
+                                                    <div className="flex justify-center mb-3">
+                                                        {player.photo ? (
+                                                            <img
+                                                                src={getOptimizedImageUrl(player.photo, { width: 120, height: 120, quality: 80 })}
+                                                                alt={player.name}
+                                                                className="w-24 h-24 rounded-full object-cover border-4 border-gray-200 shadow-md"
+                                                                loading="lazy"
+                                                            />
+                                                        ) : (
+                                                            <div className="w-24 h-24 rounded-full bg-gray-300 flex items-center justify-center border-4 border-gray-200 shadow-md">
+                                                                <User className="w-10 h-10 text-gray-500" />
+                                                            </div>
+                                                        )}
+                                                    </div>
                                                     <h3 className="font-bold text-xl text-gray-700 m-2 group-hover:text-gray-800 transition-colors">
                                                         {player.name}
                                                     </h3>
@@ -865,70 +889,108 @@ const TournamentPage: React.FC = () => {
                                     </div>
                                 ) : (
                                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                        {teams.map(team => (
-                                            <div key={team._id} className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow">
-                                                <div className="bg-gradient-to-r from-blue-50 to-blue-100 p-5 flex items-center gap-4">
-                                                    {team.logo && (
-                                                        <div className="flex-shrink-0">
-                                                            <img src={team.logo} alt={team.name} className="w-12 h-12 rounded-full border-2 border-white shadow-sm" />
-                                                        </div>
-                                                    )}
-                                                    <div className="flex-1 min-w-0">
-                                                        <h3 className="font-bold text-lg text-gray-800 truncate">{team.name}</h3>
-                                                        <div className="flex items-center justify-between mt-1">
-                                                            <span className="text-xs font-medium text-gray-600">Budget Left:</span>
-                                                            <span className="text-sm font-bold text-blue-700">₹{team.remainingBudget}</span>
+                                        {teams.map(team => {
+                                            // Calculate Max Bid for this team
+                                            const toNumber = (value?: number | string | null) => {
+                                                if (typeof value === 'number') return value;
+                                                if (typeof value === 'string') {
+                                                    const parsed = Number(value);
+                                                    return Number.isNaN(parsed) ? 0 : parsed;
+                                                }
+                                                return 0;
+                                            };
+
+                                            const remainingBudget = toNumber(team.remainingBudget);
+                                            const playersTaken = (teamPlayers[team._id] || []).length;
+                                            const minTeamSize = toNumber(tournamentDetails?.minTeamSize);
+
+                                            // Calculate minimum base price from tournament categories (minBalance)
+                                            const categories = tournamentDetails?.categories || [];
+                                            const minBalances = categories
+                                                .map((cat: any) => toNumber(cat.minBalance))
+                                                .filter((v: number) => v > 0);
+                                            const minBasePriceInTournament = minBalances.length > 0 ? Math.min(...minBalances) : 0;
+
+                                            let maxBid: number | null = null;
+                                            if (minTeamSize > 0 && minBasePriceInTournament > 0) {
+                                                const remainingMandatorySlots = Math.max(minTeamSize - playersTaken - 1, 0);
+                                                maxBid = remainingBudget - remainingMandatorySlots * minBasePriceInTournament;
+                                                if (maxBid < 0) maxBid = 0;
+                                            }
+
+                                            return (
+                                                <div key={team._id} className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow">
+                                                    <div className="bg-gradient-to-r from-blue-50 to-blue-100 p-5 flex items-center gap-4">
+                                                        {team.logo && (
+                                                            <div className="flex-shrink-0">
+                                                                <img src={team.logo} alt={team.name} className="w-12 h-12 rounded-full border-2 border-white shadow-sm" />
+                                                            </div>
+                                                        )}
+                                                        <div className="flex-1 min-w-0">
+                                                            <h3 className="font-bold text-lg text-gray-800 truncate">{team.name}</h3>
+                                                            <div className="flex flex-col mt-1">
+                                                                <div className="flex items-center justify-between">
+                                                                    <span className="text-xs font-medium text-gray-600">Budget Left:</span>
+                                                                    <span className="text-sm font-bold text-blue-700">₹{team.remainingBudget}</span>
+                                                                </div>
+                                                                {maxBid !== null && (
+                                                                    <div className="flex items-center justify-between mt-1">
+                                                                        <span className="text-xs font-medium text-gray-600">Max Bid:</span>
+                                                                        <span className="text-sm font-bold text-emerald-700">₹{maxBid.toLocaleString('en-IN')}</span>
+                                                                    </div>
+                                                                )}
+                                                            </div>
                                                         </div>
                                                     </div>
-                                                </div>
-                                                <div className="p-4">
-                                                    <button
-                                                        onClick={() => handleExpandTeam(team._id)}
-                                                        className="w-full flex items-center justify-between py-2 px-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors"
-                                                    >
-                                                        <span className="text-sm font-medium text-gray-700">
-                                                            {expandedTeamId === team._id ? 'Hide squad' : 'View squad'}
-                                                        </span>
-                                                        <svg
-                                                            className={`w-4 h-4 text-gray-500 transition-transform ${expandedTeamId === team._id ? 'rotate-180' : ''}`}
-                                                            fill="none"
-                                                            viewBox="0 0 24 24"
-                                                            stroke="currentColor"
+                                                    <div className="p-4">
+                                                        <button
+                                                            onClick={() => handleExpandTeam(team._id)}
+                                                            className="w-full flex items-center justify-between py-2 px-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors"
                                                         >
-                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                                                        </svg>
-                                                    </button>
-                                                    {expandedTeamId === team._id && (
-                                                        <div className="mt-4 space-y-3">
-                                                            {teamPlayersLoading[team._id] ? (
-                                                                <div className="flex justify-center py-4">
-                                                                    <div className="w-6 h-6 border-2 border-blue-400 border-t-transparent rounded-full animate-spin"></div>
-                                                                </div>
-                                                            ) : (
-                                                                teamPlayers[team._id]?.length > 0 ? (
-                                                                    teamPlayers[team._id]?.map(player => (
-                                                                        <div key={player._id} className="flex items-center gap-3 p-3 bg-white border border-gray-100 rounded-lg shadow-xs hover:bg-gray-50 transition-colors">
-                                                                            {player.photo && (
-                                                                                <img src={player.photo} alt={player.name} className="w-10 h-10 rounded-full border-2 border-white shadow-sm" />
-                                                                            )}
-                                                                            <div className="flex-1 min-w-0">
-                                                                                <h4 className="font-medium text-gray-800 truncate">{player.name}</h4>
-                                                                                <p className="text-xs text-gray-500">Base: ₹{player.basePrice ?? '-'}</p>
-                                                                            </div>
-                                                                            <span className="font-bold text-green-600 whitespace-nowrap">₹{player.price ?? '-'}</span>
-                                                                        </div>
-                                                                    ))
-                                                                ) : (
-                                                                    <div className="text-center py-4 text-gray-500 text-sm">
-                                                                        No players in this team yet
+                                                            <span className="text-sm font-medium text-gray-700">
+                                                                {expandedTeamId === team._id ? 'Hide squad' : 'View squad'}
+                                                            </span>
+                                                            <svg
+                                                                className={`w-4 h-4 text-gray-500 transition-transform ${expandedTeamId === team._id ? 'rotate-180' : ''}`}
+                                                                fill="none"
+                                                                viewBox="0 0 24 24"
+                                                                stroke="currentColor"
+                                                            >
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                                            </svg>
+                                                        </button>
+                                                        {expandedTeamId === team._id && (
+                                                            <div className="mt-4 space-y-3">
+                                                                {teamPlayersLoading[team._id] ? (
+                                                                    <div className="flex justify-center py-4">
+                                                                        <div className="w-6 h-6 border-2 border-blue-400 border-t-transparent rounded-full animate-spin"></div>
                                                                     </div>
-                                                                )
-                                                            )}
-                                                        </div>
-                                                    )}
+                                                                ) : (
+                                                                    teamPlayers[team._id]?.length > 0 ? (
+                                                                        teamPlayers[team._id]?.map(player => (
+                                                                            <div key={player._id} className="flex items-center gap-3 p-3 bg-white border border-gray-100 rounded-lg shadow-xs hover:bg-gray-50 transition-colors">
+                                                                                {player.photo && (
+                                                                                    <img src={player.photo} alt={player.name} className="w-10 h-10 rounded-full border-2 border-white shadow-sm" />
+                                                                                )}
+                                                                                <div className="flex-1 min-w-0">
+                                                                                    <h4 className="font-medium text-gray-800 truncate">{player.name}</h4>
+                                                                                    <p className="text-xs text-gray-500">Base: ₹{player.basePrice ?? '-'}</p>
+                                                                                </div>
+                                                                                <span className="font-bold text-green-600 whitespace-nowrap">₹{player.price ?? '-'}</span>
+                                                                            </div>
+                                                                        ))
+                                                                    ) : (
+                                                                        <div className="text-center py-4 text-gray-500 text-sm">
+                                                                            No players in this team yet
+                                                                        </div>
+                                                                    )
+                                                                )}
+                                                            </div>
+                                                        )}
+                                                    </div>
                                                 </div>
-                                            </div>
-                                        ))}
+                                            );
+                                        })}
                                     </div>
                                 )}
                             </div>

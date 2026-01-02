@@ -74,6 +74,17 @@ const AuctionInterface: React.FC = () => {
     return Array.from(new Set([...fromTournament, ...fromPlayers])).sort();
   }, [myTournament?.categories, players]);
 
+  // Minimum base price from tournament categories (minBalance)
+  const minBasePriceInTournament = useMemo(() => {
+    if (!myTournament) return 0;
+    const categories = myTournament.categories || [];
+    const minBalances = categories
+      .map(cat => toNumber(cat.minBalance))
+      .filter(v => v > 0);
+    if (!minBalances.length) return 0;
+    return Math.min(...minBalances);
+  }, [myTournament]);
+
   // Show notification helper
   const showNotification = useCallback((type: 'success' | 'error' | 'info', message: string) => {
     setNotification({ type, message });
@@ -285,7 +296,9 @@ const AuctionInterface: React.FC = () => {
     try {
       const result = await api.revertUnsoldCategory(category, myTournament?.id);
       showNotification('success', `Reverted ${result.modified} player(s) to available`);
-      await fetchPlayers();
+      if (fetchPlayers) {
+        await fetchPlayers();
+      }
     } catch (error) {
       if (error instanceof Error) {
         showNotification('error', error.message || 'Failed to revert players');
@@ -778,6 +791,18 @@ const AuctionInterface: React.FC = () => {
               const totalBudget = Math.max(toNumber(team.budget), 1);
               const usedPercentage = ((totalBudget - remainingBudget) / totalBudget) * 100;
               const safeColor = team.color || '#888';
+
+              // Max Bid calculation:
+              // maxBid = remainingBudget - ((minTeamSize - playersTaken - 1) * minBasePriceInTournament)
+              const playersTaken = (soldPlayersByTeam[team.id] || []).length;
+              const minTeamSize = toNumber(myTournament?.minTeamSize);
+              let maxBid: number | null = null;
+              if (minTeamSize > 0 && minBasePriceInTournament > 0) {
+                const remainingMandatorySlots = Math.max(minTeamSize - playersTaken - 1, 0);
+                maxBid = remainingBudget - remainingMandatorySlots * minBasePriceInTournament;
+                if (maxBid < 0) maxBid = 0;
+              }
+
               return (
                 <div key={team.id} className="mb-4 bg-white rounded-lg shadow-sm border-2 p-4 transition-all duration-200 hover:shadow-md"
                   style={{ borderColor: safeColor + '30' }}>
@@ -797,7 +822,18 @@ const AuctionInterface: React.FC = () => {
                       </div>
                     </div>
                     <div className="text-right">
-                      <div className="font-bold text-lg" style={{ color: safeColor }}>{formatCurrency(remainingBudget)}</div>
+                      <div className="text-sm font-medium text-gray-600 mb-1">Budget Left:</div>
+                      <div className="font-bold text-lg mb-2" style={{ color: safeColor }}>
+                        {formatCurrency(remainingBudget)}
+                      </div>
+                      {maxBid !== null && (
+                        <>
+                          <div className="text-sm font-medium text-gray-600 mb-1">Max Bid:</div>
+                          <div className="text-base font-semibold text-emerald-700 mb-2">
+                            {formatCurrency(maxBid)}
+                          </div>
+                        </>
+                      )}
                       <div className="text-xs text-gray-500">{usedPercentage.toFixed(1)}% used</div>
                       <div className="w-24 h-2 bg-gray-200 rounded-full mt-1">
                         <div
