@@ -17,4 +17,7 @@ const playerSchema = new mongoose.Schema({
     // }]
 });
 
+// Indexes for performance
+playerSchema.index({ name: 1 }); // For name-based searches
+
 module.exports = mongoose.model('Player', playerSchema); 

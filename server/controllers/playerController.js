@@ -47,11 +47,12 @@ const splitPayload = (payload = {}) => {
 
 const hydrateParticipation = (doc) => {
     if (!doc) return null;
+    // Handle both Mongoose documents and lean objects
     const participation = doc.toObject ? doc.toObject() : doc;
-    const playerDoc = participation.player && participation.player.toObject
+    const playerDoc = participation.player && typeof participation.player === 'object' && participation.player.toObject
         ? participation.player.toObject()
         : participation.player;
-    const teamDoc = participation.team && participation.team.toObject
+    const teamDoc = participation.team && typeof participation.team === 'object' && participation.team.toObject
         ? participation.team.toObject()
         : participation.team;
 
@@ -83,9 +84,10 @@ const hydrateParticipation = (doc) => {
     return combined;
 };
 
+// Optimized populate function - only selects needed fields
 const populateParticipation = (query) =>
     query.populate([
-        { path: 'player' },
+        { path: 'player', select: 'name photo age role station primaryRole battingStyle bowlingStyle' },
         { path: 'team', select: 'name logo color owner' }
     ]);
 
@@ -138,9 +140,13 @@ exports.getAllPlayers = async (req, res) => {
             }
         }
 
+        // Select only needed fields from PlayerTournament
         const participationQuery = PlayerTournament.find(filter)
+            .select('player tournamentId team price basePrice status isSold category previousYearTeam')
             .skip(skip)
-            .limit(limit);
+            .limit(limit)
+            .lean(); // Use lean() for better performance
+        
         const participations = await populateParticipation(participationQuery);
 
         let playersWithTeamName;
@@ -148,22 +154,19 @@ exports.getAllPlayers = async (req, res) => {
 
         if (participations.length === 0) {
             // Fallback to legacy player data if participation entries do not exist yet
-            let projection = 'name age team status price basePrice previousTeam location tournamentId';
-            if (req.query.team) {
-                projection += ' photo';
-            }
+            let projection = 'name age team status price basePrice previousTeam location tournamentId photo';
             const players = await Player.find(filter)
                 .skip(skip)
                 .limit(limit)
                 .select(projection)
-                .populate('team', 'name');
+                .populate('team', 'name')
+                .lean(); // Use lean() for better performance
 
             playersWithTeamName = players.map(player => {
-                const obj = player.toObject();
-                if (obj.status === 'sold' && obj.team && obj.team.name) {
-                    obj.teamName = obj.team.name;
+                if (player.status === 'sold' && player.team && player.team.name) {
+                    player.teamName = player.team.name;
                 }
-                return obj;
+                return player;
             });
             total = await Player.countDocuments(filter);
         } else {
@@ -210,12 +213,12 @@ exports.getPlayer = async (req, res) => {
             participationQuery = PlayerTournament.findOne({ player: req.params.id }).sort({ updatedAt: -1 });
         }
 
-        const participation = await populateParticipation(participationQuery);
+        const participation = await populateParticipation(participationQuery).lean();
         if (participation) {
             return res.json(hydrateParticipation(participation));
         }
 
-        const player = await Player.findById(req.params.id);
+        const player = await Player.findById(req.params.id).lean();
         if (!player) return res.status(404).json({ error: 'Player not found' });
         res.json(player);
     } catch (err) {
@@ -542,11 +545,12 @@ exports.getPlayerSummaries = async (req, res) => {
             filter.tournamentId = myTournament._id;
         }
 
+        // Already optimized with select and lean, but ensure populate only selects name
         const participations = await PlayerTournament.find(filter)
             .select('player tournamentId status basePrice price team category isSold')
             .populate({ path: 'player', select: 'name' })
             .sort({ createdAt: 1 })
-            .lean();
+            .lean(); // Already using lean - good!
 
         if (!participations.length) {
             return res.json([]);
@@ -580,9 +584,10 @@ exports.checkDuplicatePlayerName = async (req, res) => {
         }
         const regex = buildNameMatchRegex(rawName);
 
+        // Already optimized with select and lean - good!
         const players = await Player.find({ name: regex })
             .select('name photo station age primaryRole battingStyle bowlingStyle')
-            .lean();
+            .lean(); // Already using lean - good!
 
         res.json(players);
     } catch (err) {

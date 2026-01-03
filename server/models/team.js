@@ -12,4 +12,9 @@ const teamSchema = new mongoose.Schema({
     logo: { type: String, default: '' }
 });
 
+// Indexes for performance
+teamSchema.index({ tournamentId: 1 }); // Most common query filter
+teamSchema.index({ tournamentId: 1, owner: 1 }); // For owner-specific queries
+teamSchema.index({ tournamentId: 1, name: 1 }); // For name searches within tournament
+
 module.exports = mongoose.model('Team', teamSchema); 

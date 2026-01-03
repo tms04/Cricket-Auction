@@ -1,6 +1,7 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
+const compression = require('compression');
 const dotenv = require('dotenv');
 const path = require('path');
 const http = require('http');
@@ -21,6 +22,17 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 // Middleware
+// Enable compression - should be early in middleware stack
+app.use(compression({
+    filter: (req, res) => {
+        // Don't compress images or already compressed files
+        if (req.headers['x-no-compression']) {
+            return false;
+        }
+        return compression.filter(req, res);
+    },
+    level: 6 // Balance between compression and CPU usage (1-9, 6 is good default)
+}));
 app.use(cors());
 app.use(express.static(path.join(__dirname, 'public')));
 

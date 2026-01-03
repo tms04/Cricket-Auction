@@ -22,4 +22,10 @@ const auctionSchema = new mongoose.Schema({
     finalAmount: { type: Number }
 });
 
+// Indexes for performance
+auctionSchema.index({ tournamentId: 1, status: 1 }); // For finding current/active auctions
+auctionSchema.index({ tournamentId: 1, timestamp: -1 }); // For listing auctions by tournament
+auctionSchema.index({ player: 1, tournamentId: 1 }); // For player-specific auction queries
+auctionSchema.index({ tournamentId: 1, status: 1, timestamp: -1 }); // Compound index for common query pattern
+
 module.exports = mongoose.model('Auction', auctionSchema); 

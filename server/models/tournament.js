@@ -20,4 +20,9 @@ const tournamentSchema = new mongoose.Schema({
     }]
 });
 
+// Indexes for performance
+tournamentSchema.index({ status: 1 }); // For filtering by status
+tournamentSchema.index({ auctioneerEmail: 1 }); // For finding tournament by auctioneer (case-insensitive query, but still helps)
+tournamentSchema.index({ status: 1, startDate: -1 }); // For listing tournaments by status and date
+
 module.exports = mongoose.model('Tournament', tournamentSchema); 

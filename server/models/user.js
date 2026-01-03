@@ -9,4 +9,9 @@ const userSchema = new mongoose.Schema({
     photo: { type: String },
 });
 
+// Indexes for performance
+userSchema.index({ email: 1 }); // Already unique, but explicit index helps
+userSchema.index({ role: 1 }); // For filtering by role
+userSchema.index({ tournament: 1 }); // For finding users by tournament
+
 module.exports = mongoose.model('User', userSchema); 

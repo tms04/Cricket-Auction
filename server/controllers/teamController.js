@@ -19,11 +19,12 @@ exports.getAllTeams = async (req, res) => {
             filter.tournamentId = req.query.tournamentId;
         }
 
-        // Only select needed fields for the list view
+        // Only select needed fields for the list view, use lean() for better performance
         const teams = await Team.find(filter)
             .skip(skip)
             .limit(limit)
-            .select('name budget remainingBudget players tournamentId color logo owner');
+            .select('name budget remainingBudget players tournamentId color logo owner')
+            .lean(); // Use lean() for read-only queries
 
         const total = await Team.countDocuments(filter);
         res.json({ teams, total });
@@ -34,7 +35,10 @@ exports.getAllTeams = async (req, res) => {
 
 exports.getTeam = async (req, res) => {
     try {
-        const team = await Team.findById(req.params.id).populate('players');
+        // Optimize: Only populate player names and basic info, not full player objects, use lean()
+        const team = await Team.findById(req.params.id)
+            .populate('players', 'name photo age role') // Only get essential player fields
+            .lean(); // Use lean() for read-only queries
         if (!team) return res.status(404).json({ error: 'Team not found' });
         res.json(team);
     } catch (err) {
@@ -58,7 +62,8 @@ exports.createTeam = async (req, res) => {
         
         const newTeam = new Team(req.body);
         const savedTeam = await newTeam.save();
-        const teams = await Team.find().populate('players');
+        // Remove unnecessary refetch - just return the saved team
+        // Socket.io will handle broadcasting updates if needed
         res.status(201).json(savedTeam);
     } catch (err) {
         res.status(400).json({ error: err.message });
@@ -79,7 +84,10 @@ exports.updateTeam = async (req, res) => {
             return res.status(400).json({ error: 'Base64 images are not supported. Please upload images to Cloudinary.' });
         }
         
-        const updatedTeam = await Team.findByIdAndUpdate(req.params.id, req.body, { new: true }).populate('players');
+        // Optimize: Only populate player names if needed, use lean() for response
+        const updatedTeam = await Team.findByIdAndUpdate(req.params.id, req.body, { new: true })
+            .populate('players', 'name photo age role') // Only get essential player fields
+            .lean(); // Use lean() for better performance
         if (!updatedTeam) return res.status(404).json({ error: 'Team not found' });
         res.json(updatedTeam);
     } catch (err) {

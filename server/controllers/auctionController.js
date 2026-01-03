@@ -13,12 +13,23 @@ async function getAuctioneerTournament(email) {
 
 exports.getAllAuctions = async (req, res) => {
     try {
-        const auctions = await Auction.find().populate('player team currentBidder winner bids.team');
+        // Optimize: Select only needed fields and limit populate fields, use lean()
+        const auctions = await Auction.find()
+            .populate('player', 'name photo') // Only get name and photo from player
+            .populate('team', 'name logo') // Only get name and logo from team
+            .populate('currentBidder', 'name') // Only get name from currentBidder
+            .populate('winner', 'name') // Only get name from winner
+            .populate('bids.team', 'name') // Only get name from bid teams
+            .lean(); // Use lean() for better performance
         const mappedAuctions = auctions.map(a => {
-            const obj = a.toObject ? a.toObject() : a;
-            obj.playerId = obj.player ? String(obj.player) : undefined;
-            delete obj.player;
-            return obj;
+            a.playerId = a.player ? String(a.player._id || a.player) : undefined;
+            // Keep player name and photo but remove full object
+            if (a.player && typeof a.player === 'object') {
+                a.playerName = a.player.name;
+                a.playerPhoto = a.player.photo;
+            }
+            delete a.player;
+            return a;
         });
         res.json(mappedAuctions);
     } catch (err) {
@@ -28,12 +39,23 @@ exports.getAllAuctions = async (req, res) => {
 
 exports.getAuction = async (req, res) => {
     try {
-        const auction = await Auction.findById(req.params.id).populate('player team currentBidder winner bids.team');
+        // Optimize: Select only needed fields and limit populate fields, use lean()
+        const auction = await Auction.findById(req.params.id)
+            .populate('player', 'name photo') // Only get name and photo from player
+            .populate('team', 'name logo') // Only get name and logo from team
+            .populate('currentBidder', 'name') // Only get name from currentBidder
+            .populate('winner', 'name') // Only get name from winner
+            .populate('bids.team', 'name') // Only get name from bid teams
+            .lean(); // Use lean() for better performance
         if (!auction) return res.status(404).json({ error: 'Auction not found' });
-        const auctionObj = auction.toObject ? auction.toObject() : auction;
-        auctionObj.playerId = auctionObj.player ? String(auctionObj.player) : undefined;
-        delete auctionObj.player;
-        res.json(auctionObj);
+        auction.playerId = auction.player ? String(auction.player._id || auction.player) : undefined;
+        // Keep player name and photo but remove full object
+        if (auction.player && typeof auction.player === 'object') {
+            auction.playerName = auction.player.name;
+            auction.playerPhoto = auction.player.photo;
+        }
+        delete auction.player;
+        res.json(auction);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -60,13 +82,22 @@ exports.createAuction = async (req, res) => {
         console.log('New auction object:', newAuction);
         const savedAuction = await newAuction.save();
         console.log('Auction saved successfully:', savedAuction);
-        const auctions = await Auction.find().populate('player team currentBidder winner bids.team');
-        // Emit socket event for auction creation
+        // Optimize: Populate minimal fields for response and socket emission
         const io = req.app.get('io');
+        const populatedAuction = await Auction.findById(savedAuction._id)
+            .populate('player', 'name photo')
+            .populate('currentBidder', 'name')
+            .lean();
         if (io && savedAuction.tournamentId) {
-            io.emit(`auction_update_${savedAuction.tournamentId}`, savedAuction);
+            io.emit(`auction_update_${savedAuction.tournamentId}`, populatedAuction);
         }
-        res.status(201).json(savedAuction.toObject ? savedAuction.toObject() : savedAuction);
+        populatedAuction.playerId = populatedAuction.player ? String(populatedAuction.player._id || populatedAuction.player) : undefined;
+        if (populatedAuction.player && typeof populatedAuction.player === 'object') {
+            populatedAuction.playerName = populatedAuction.player.name;
+            populatedAuction.playerPhoto = populatedAuction.player.photo;
+        }
+        delete populatedAuction.player;
+        res.status(201).json(populatedAuction);
     } catch (err) {
         console.error('Error in createAuction:', err);
         res.status(400).json({ error: err.message });
@@ -77,6 +108,7 @@ exports.placeBid = async (req, res) => {
     try {
         const { auctionId, teamId, amount } = req.body;
 
+        // Cannot use lean() here because we need to save the auction
         const auction = await Auction.findById(auctionId);
         if (!auction) {
             return res.status(404).json({ error: 'Auction not found' });
@@ -86,7 +118,8 @@ exports.placeBid = async (req, res) => {
             return res.status(400).json({ error: 'Auction is not active for bidding' });
         }
 
-        const team = await Team.findById(teamId);
+        // Optimize: Only select needed fields for read-only check, use lean()
+        const team = await Team.findById(teamId).select('name remainingBudget').lean();
         if (!team) {
             return res.status(404).json({ error: 'Team not found' });
         }
@@ -97,13 +130,15 @@ exports.placeBid = async (req, res) => {
         }
 
         // Check if bid is higher than current bid or at least base price for first bid
+        // Optimize: Only select basePrice field for read-only check, use lean()
         let participation = await PlayerTournament.findOne({
             player: auction.player,
             tournamentId: auction.tournamentId
-        });
+        }).select('basePrice').lean();
         let player = null;
         if (!participation) {
-            player = await Player.findById(auction.player);
+            // Optimize: Only select basePrice field for read-only check, use lean()
+            player = await Player.findById(auction.player).select('basePrice').lean();
             if (!player) {
                 return res.status(404).json({ error: 'Player not found' });
             }
@@ -139,13 +174,26 @@ exports.placeBid = async (req, res) => {
         // Emit socket event for bid update
         const io = req.app.get('io');
         if (io && auction.tournamentId) {
-            io.emit(`auction_update_${auction.tournamentId}`, auction);
+            // Populate minimal fields for socket emission
+            const populatedAuction = await Auction.findById(auction._id)
+                .populate('player', 'name photo')
+                .populate('currentBidder', 'name')
+                .lean();
+            io.emit(`auction_update_${auction.tournamentId}`, populatedAuction);
         }
 
-        const auctionObj = auction.toObject ? auction.toObject() : auction;
-        auctionObj.playerId = auctionObj.player ? String(auctionObj.player) : undefined;
+        // Optimize: Fetch minimal populated data for response
+        const auctionObj = await Auction.findById(auction._id)
+            .populate('player', 'name photo')
+            .populate('currentBidder', 'name')
+            .lean();
+        auctionObj.playerId = auctionObj.player ? String(auctionObj.player._id || auctionObj.player) : undefined;
+        if (auctionObj.player && typeof auctionObj.player === 'object') {
+            auctionObj.playerName = auctionObj.player.name;
+            auctionObj.playerPhoto = auctionObj.player.photo;
+        }
         delete auctionObj.player;
-        auctionObj.currentBidder = auctionObj.currentBidder ? String(auctionObj.currentBidder) : null; // <--- Always return as string
+        auctionObj.currentBidder = auctionObj.currentBidder ? String(auctionObj.currentBidder._id || auctionObj.currentBidder) : null;
         res.json(auctionObj);
     } catch (err) {
         console.error('Error in placeBid:', err);
@@ -164,6 +212,7 @@ exports.completeAuction = async (req, res) => {
         }
 
         console.time("findAuction");
+        // Cannot use lean() here because we need to save the auction
         const auction = await Auction.findById(auctionId);
         console.timeEnd("findAuction");
         if (!auction) return res.status(404).json({ error: 'Auction not found' });
@@ -172,6 +221,7 @@ exports.completeAuction = async (req, res) => {
 
         let teamPromise = null;
         let updatedTeam = null;
+        // Optimize: Only select needed fields, but cannot use lean() because we may need to save
         let participation = await PlayerTournament.findOne({
             player: auction.player,
             tournamentId: auction.tournamentId
@@ -184,6 +234,7 @@ exports.completeAuction = async (req, res) => {
         }
         if (winnerId) {
             console.time("findTeam");
+            // Cannot use lean() here because we need to save the team
             const team = await Team.findById(winnerId);
             console.timeEnd("findTeam");
             if (!team) return res.status(404).json({ error: 'Winning team not found' });
@@ -234,22 +285,32 @@ exports.completeAuction = async (req, res) => {
 
         // Emit socket event for auction completion
         const io = req.app.get('io');
+        // Optimize: Populate minimal fields for response and socket emission
+        const populatedAuction = await Auction.findById(auction._id)
+            .populate('player', 'name photo')
+            .populate('team', 'name logo')
+            .populate('currentBidder', 'name')
+            .populate('winner', 'name')
+            .lean();
         if (io && auction.tournamentId) {
-            io.emit(`auction_update_${auction.tournamentId}`, auction);
+            io.emit(`auction_update_${auction.tournamentId}`, populatedAuction);
             // Emit a lightweight result event so viewers can react deterministically
             io.emit(`auction_result_${auction.tournamentId}`, {
-                playerId: auction.player ? String(auction.player) : undefined,
-                status: auction.status,
-                winnerName: auction.winnerName,
-                finalAmount: auction.finalAmount ?? auction.bidAmount
+                playerId: populatedAuction.player ? String(populatedAuction.player._id || populatedAuction.player) : undefined,
+                status: populatedAuction.status,
+                winnerName: populatedAuction.winnerName,
+                finalAmount: populatedAuction.finalAmount ?? populatedAuction.bidAmount
             });
         }
 
-        const auctionObj = auction.toObject ? auction.toObject() : auction;
-        auctionObj.playerId = auctionObj.player ? String(auctionObj.player) : undefined;
-        delete auctionObj.player;
+        populatedAuction.playerId = populatedAuction.player ? String(populatedAuction.player._id || populatedAuction.player) : undefined;
+        if (populatedAuction.player && typeof populatedAuction.player === 'object') {
+            populatedAuction.playerName = populatedAuction.player.name;
+            populatedAuction.playerPhoto = populatedAuction.player.photo;
+        }
+        delete populatedAuction.player;
         console.timeEnd("completeAuction_total");
-        res.json(auctionObj);
+        res.json(populatedAuction);
     } catch (err) {
         console.error('Error in completeAuction:', err);
         res.status(400).json({ error: err.message });
@@ -264,12 +325,22 @@ exports.updateAuction = async (req, res) => {
                 return res.status(403).json({ error: 'Forbidden: You can only update auctions for your assigned tournament.' });
             }
         }
-        const updatedAuction = await Auction.findByIdAndUpdate(req.params.id, req.body, { new: true }).populate('player team currentBidder winner bids.team');
+        // Optimize: Select only needed fields and limit populate fields, use lean() for response
+        const updatedAuction = await Auction.findByIdAndUpdate(req.params.id, req.body, { new: true })
+            .populate('player', 'name photo')
+            .populate('team', 'name logo')
+            .populate('currentBidder', 'name')
+            .populate('winner', 'name')
+            .populate('bids.team', 'name')
+            .lean();
         if (!updatedAuction) return res.status(404).json({ error: 'Auction not found' });
-        const auctionObj = updatedAuction.toObject ? updatedAuction.toObject() : updatedAuction;
-        auctionObj.playerId = auctionObj.player ? String(auctionObj.player) : undefined;
-        delete auctionObj.player;
-        res.json(auctionObj);
+        updatedAuction.playerId = updatedAuction.player ? String(updatedAuction.player._id || updatedAuction.player) : undefined;
+        if (updatedAuction.player && typeof updatedAuction.player === 'object') {
+            updatedAuction.playerName = updatedAuction.player.name;
+            updatedAuction.playerPhoto = updatedAuction.player.photo;
+        }
+        delete updatedAuction.player;
+        res.json(updatedAuction);
     } catch (err) {
         res.status(400).json({ error: err.message });
     }
@@ -286,7 +357,8 @@ exports.deleteAuction = async (req, res) => {
         }
         const deletedAuction = await Auction.findByIdAndDelete(req.params.id);
         if (!deletedAuction) return res.status(404).json({ error: 'Auction not found' });
-        const auctions = await Auction.find().populate('player team currentBidder winner bids.team');
+        // Remove unnecessary refetch - just return success message
+        // Socket.io will handle broadcasting updates if needed
         res.json({ message: 'Auction deleted' });
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -318,7 +390,7 @@ exports.resetAuctions = async (req, res) => {
             team.remainingBudget = team.budget;
             await team.save();
         }
-        const auctions = await Auction.find();
+        // Remove unnecessary refetch
         res.json({ message: 'Auction, players, and teams reset for tournament.' });
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -330,28 +402,35 @@ exports.getCurrentAuction = async (req, res) => {
     try {
         const { tournamentId } = req.query;
         if (!tournamentId) return res.status(400).json({ error: 'tournamentId required' });
+        // Optimize: Select only needed fields and limit populate fields, use lean()
         const auction = await Auction.findOne({ tournamentId, status: 'active' })
-            .populate('player team currentBidder winner bids.team');
+            .populate('player', 'name photo')
+            .populate('team', 'name logo')
+            .populate('currentBidder', 'name')
+            .populate('winner', 'name')
+            .populate('bids.team', 'name')
+            .lean();
         if (!auction) return res.json(null);
-        const auctionObj = auction.toObject ? auction.toObject() : auction;
         // Ensure playerId is always a string
-        if (auctionObj.player && typeof auctionObj.player === 'object' && auctionObj.player._id) {
-            auctionObj.playerId = String(auctionObj.player._id);
-        } else if (auctionObj.player) {
-            auctionObj.playerId = String(auctionObj.player);
+        if (auction.player && typeof auction.player === 'object' && auction.player._id) {
+            auction.playerId = String(auction.player._id);
+            auction.playerName = auction.player.name;
+            auction.playerPhoto = auction.player.photo;
+        } else if (auction.player) {
+            auction.playerId = String(auction.player);
         } else {
-            auctionObj.playerId = undefined;
+            auction.playerId = undefined;
         }
-        delete auctionObj.player;
+        delete auction.player;
         // Ensure currentBidder is always a string
-        if (auctionObj.currentBidder && typeof auctionObj.currentBidder === 'object' && auctionObj.currentBidder._id) {
-            auctionObj.currentBidder = String(auctionObj.currentBidder._id);
-        } else if (auctionObj.currentBidder) {
-            auctionObj.currentBidder = String(auctionObj.currentBidder);
+        if (auction.currentBidder && typeof auction.currentBidder === 'object' && auction.currentBidder._id) {
+            auction.currentBidder = String(auction.currentBidder._id);
+        } else if (auction.currentBidder) {
+            auction.currentBidder = String(auction.currentBidder);
         } else {
-            auctionObj.currentBidder = null;
+            auction.currentBidder = null;
         }
-        res.json(auctionObj);
+        res.json(auction);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

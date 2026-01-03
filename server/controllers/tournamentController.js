@@ -7,7 +7,12 @@ const bcrypt = require('bcryptjs');
 
 exports.getAllTournaments = async (req, res) => {
     try {
-        const tournaments = await Tournament.find().populate('teams');
+        // Optimize: Only populate team names/ids, not full team objects
+        // Select only needed fields and use lean() for better performance
+        const tournaments = await Tournament.find()
+            .select('name status logo startDate endDate maxTeams budget auctioneerEmail maxTeamSize minTeamSize auctionType categories')
+            .populate('teams', 'name logo') // Only get name and logo from teams
+            .lean();
         console.log('User email:', `"${req.user?.email}"`);
         tournaments.forEach(t => {
             console.log('Tournament auctioneerEmail:', `"${t.auctioneerEmail}"`);
@@ -22,7 +27,10 @@ exports.getAllTournaments = async (req, res) => {
 
 exports.getTournament = async (req, res) => {
     try {
-        const tournament = await Tournament.findById(req.params.id).populate('teams');
+        // Optimize: Only populate team names/ids, select all tournament fields, use lean()
+        const tournament = await Tournament.findById(req.params.id)
+            .populate('teams', 'name logo') // Only get name and logo from teams
+            .lean();
         if (!tournament) return res.status(404).json({ error: 'Tournament not found' });
         res.json(tournament);
     } catch (err) {
@@ -82,7 +90,10 @@ exports.updateTournament = async (req, res) => {
             return res.status(400).json({ error: 'Base64 images are not supported. Please upload images to Cloudinary.' });
         }
 
-        const updatedTournament = await Tournament.findByIdAndUpdate(req.params.id, req.body, { new: true }).populate('teams');
+        // Optimize: Only populate team names/ids, use lean() for response
+        const updatedTournament = await Tournament.findByIdAndUpdate(req.params.id, req.body, { new: true })
+            .populate('teams', 'name logo') // Only get name and logo from teams
+            .lean();
         if (!updatedTournament) return res.status(404).json({ error: 'Tournament not found' });
         res.json(updatedTournament);
     } catch (err) {
