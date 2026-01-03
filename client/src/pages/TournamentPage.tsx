@@ -412,8 +412,8 @@ const TournamentPage: React.FC = () => {
                         </div>
                     )}
                     <div className="text-center sm:text-left">
-                        <h1 className="text-3xl sm:text-4xl md:text-5xl font-extrabold text-yellow-300 mb-2 drop-shadow-[0_2px_8px_rgba(255,215,0,0.25)]">{tournament.name}</h1>
-                        <div className={`inline-block px-3 sm:px-4 py-1 rounded-full text-sm sm:text-base font-semibold mb-2 ${tournament.status === 'completed'
+                        <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-extrabold text-yellow-300 mb-2 drop-shadow-[0_2px_8px_rgba(255,215,0,0.25)] break-words px-2 sm:px-0">{tournament.name}</h1>
+                        <div className={`inline-block px-3 sm:px-4 py-1 rounded-full text-xs sm:text-sm md:text-base font-semibold mb-2 ${tournament.status === 'completed'
                             ? 'bg-gray-800/50 text-gray-200 border border-yellow-400/30'
                             : 'bg-gradient-to-r from-yellow-400/60 to-orange-400/60 text-yellow-900 border border-yellow-400/60 shadow'
                             }`}>
@@ -447,46 +447,73 @@ const TournamentPage: React.FC = () => {
                     </div>
                 </div>
 
+                {/* Mobile Tab Navigation */}
+                <div className="flex md:hidden justify-center mb-6">
+                    <div className="inline-flex bg-gradient-to-r from-yellow-400/10 via-orange-400/10 to-red-400/10 backdrop-blur-sm rounded-lg p-0.5 border-2 border-yellow-400/30 shadow overflow-x-auto max-w-full">
+                        <div className="flex">
+                            {[
+                                { value: 'live', label: 'Live' },
+                                { value: 'sold', label: 'Sold' },
+                                { value: 'available', label: 'Avail' },
+                                { value: 'unsold', label: 'Unsold' },
+                                { value: 'teams', label: 'Teams' }
+                            ].map((tabOption) => (
+                                <button
+                                    key={tabOption.value}
+                                    className={`flex items-center px-3 py-2 rounded-lg font-bold text-xs sm:text-sm transition-all whitespace-nowrap ${tab === tabOption.value
+                                        ? 'bg-gradient-to-r from-yellow-400 via-orange-400 to-red-400 text-[#232946] shadow-[0_0_10px_1px_rgba(255,215,0,0.25)]' +
+                                        (tabOption.value === 'live' ? ' animate-pulse-fast' : '')
+                                        : 'text-yellow-200 hover:text-yellow-100'
+                                        }`}
+                                    onClick={() => setTab(tabOption.value as typeof tab)}
+                                >
+                                    {tabOption.label}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+
                 {/* Main Card Content with spotlight */}
                 <div className="relative">
                     <div className="absolute -inset-4 sm:-inset-8 z-0 pointer-events-none">
                         <div className="w-full h-full rounded-3xl bg-gradient-to-br from-yellow-400/10 via-orange-400/10 to-red-400/10 blur-2xl opacity-80"></div>
                     </div>
-                    <div className="relative bg-gradient-to-br from-[#232946]/80 to-[#1a223f]/80 backdrop-blur-xl rounded-2xl sm:rounded-3xl shadow-2xl p-4 sm:p-6 md:p-10 mb-8 sm:mb-10 border-4 border-yellow-400/60 ring-1 sm:ring-2 ring-yellow-300/30 ring-offset-1 sm:ring-offset-2 z-10">
+                    <div className="relative bg-gradient-to-br from-[#232946]/80 to-[#1a223f]/80 backdrop-blur-xl rounded-2xl sm:rounded-3xl shadow-2xl p-3 sm:p-4 md:p-6 lg:p-10 mb-8 sm:mb-10 border-4 border-yellow-400/60 ring-1 sm:ring-2 ring-yellow-300/30 ring-offset-1 sm:ring-offset-2 z-10">
                         {tab === 'live' && (
                             <div className="relative">
-                                <div className="text-xs text-gray-400 mb-4 text-center md:text-left">
+                                <div className="text-xs text-gray-400 mb-3 sm:mb-4 text-center md:text-left">
                                     Last updated: {lastUpdated ? lastUpdated.toLocaleTimeString() : '-'}
                                 </div>
                                 {liveAuction ? (
-                                    <div className="flex flex-col lg:flex-row gap-6 lg:gap-8">
+                                    <div className="flex flex-col lg:flex-row gap-4 sm:gap-6 lg:gap-8">
                                         {/* Left Column - Player Photo with Name Info */}
                                         <div className="lg:w-2/5">
-                                            <div className="relative bg-gradient-to-br from-yellow-400/10 via-orange-400/10 to-red-400/10 rounded-2xl p-4 sm:p-6 border-2 border-yellow-400/30 shadow-2xl">
+                                            <div className="relative bg-gradient-to-br from-yellow-400/10 via-orange-400/10 to-red-400/10 rounded-2xl p-3 sm:p-4 md:p-6 border-2 border-yellow-400/30 shadow-2xl">
                                                 {/* Role Badge */}
-                                                <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
-                                                    <div className={`px-4 py-1.5 rounded-full font-bold text-sm ${getRoleColor(liveAuctionPlayer?.primaryRole || '')} text-white shadow-lg flex items-center gap-2`}>
-                                                        <span className="text-lg">{getRoleIcon(liveAuctionPlayer?.primaryRole || '')}</span>
-                                                        {liveAuctionPlayer?.primaryRole || 'Player'}
+                                                <div className="absolute -top-3 left-1/2 transform -translate-x-1/2 z-10">
+                                                    <div className={`px-3 sm:px-4 py-1 sm:py-1.5 rounded-full font-bold text-xs sm:text-sm ${getRoleColor(liveAuctionPlayer?.primaryRole || '')} text-white shadow-lg flex items-center gap-1 sm:gap-2 whitespace-nowrap max-w-[90vw] overflow-hidden`}>
+                                                        <span className="text-sm sm:text-lg">{getRoleIcon(liveAuctionPlayer?.primaryRole || '')}</span>
+                                                        <span className="truncate">{liveAuctionPlayer?.primaryRole || 'Player'}</span>
                                                     </div>
                                                 </div>
 
                                                 {/* Player Photo */}
-                                                <div className="mt-6 flex justify-center">
+                                                <div className="mt-6 sm:mt-8 flex justify-center">
                                                     {liveAuctionPlayer?.photo ? (
-                                                        <div className="relative group">
+                                                        <div className="relative group w-full max-w-xs sm:max-w-md">
                                                             <div className="absolute inset-0 bg-gradient-to-r from-yellow-400 to-orange-400 rounded-2xl blur-xl opacity-50 group-hover:opacity-70 transition-opacity"></div>
                                                             <img
                                                                 src={liveAuctionPlayer.photo}
                                                                 alt={liveAuctionPlayer.name}
-                                                                className="relative w-full max-w-md h-[280px] object-cover rounded-xl border-4 border-yellow-300/80 shadow-2xl transform group-hover:scale-[1.02] transition-transform duration-300"
+                                                                className="relative w-full h-[200px] sm:h-[240px] md:h-[280px] object-cover rounded-xl border-4 border-yellow-300/80 shadow-2xl transform group-hover:scale-[1.02] transition-transform duration-300"
                                                                 style={{ background: 'transparent' }}
                                                             />
                                                         </div>
                                                     ) : (
-                                                        <div className="flex items-center justify-center w-full h-[280px] bg-gradient-to-br from-yellow-100 to-orange-100 rounded-2xl border-4 border-yellow-300 shadow-2xl">
+                                                        <div className="flex items-center justify-center w-full max-w-xs sm:max-w-md h-[200px] sm:h-[240px] md:h-[280px] bg-gradient-to-br from-yellow-100 to-orange-100 rounded-2xl border-4 border-yellow-300 shadow-2xl">
                                                             <div className="text-center">
-                                                                <div className="text-8xl font-extrabold text-yellow-700 mb-2">
+                                                                <div className="text-6xl sm:text-7xl md:text-8xl font-extrabold text-yellow-700 mb-2">
                                                                     {liveAuctionPlayer?.name?.[0] || '?'}
                                                                 </div>
                                                             </div>
@@ -497,16 +524,16 @@ const TournamentPage: React.FC = () => {
                                                 {/* Name and Former Team Info (Desktop only) */}
                                                 <div className="hidden lg:block mt-6">
                                                     <div className="text-center">
-                                                        <h2 className="text-3xl font-extrabold text-white mb-3 drop-shadow-lg">
+                                                        <h2 className="text-2xl md:text-3xl font-extrabold text-white mb-3 drop-shadow-lg break-words">
                                                             {liveAuctionPlayer ? liveAuctionPlayer.name : '-'}
                                                         </h2>
                                                         {liveAuctionPlayer?.previousYearTeam && (
                                                             <div className="bg-gradient-to-r from-blue-500/20 to-cyan-500/20 rounded-xl p-4 border border-blue-400/30">
                                                                 <div className="flex items-center justify-center gap-3">
                                                                     <Home className="w-5 h-5 text-blue-300" />
-                                                                    <div>
-                                                                        <div className="text-sm text-blue-300">Former Team</div>
-                                                                        <div className="text-lg font-bold text-white">{liveAuctionPlayer.previousYearTeam}</div>
+                                                                    <div className="min-w-0">
+                                                                        <div className="text-sm text-blue-300 truncate">Former Team</div>
+                                                                        <div className="text-lg font-bold text-white truncate">{liveAuctionPlayer.previousYearTeam}</div>
                                                                     </div>
                                                                 </div>
                                                             </div>
@@ -515,12 +542,12 @@ const TournamentPage: React.FC = () => {
                                                 </div>
 
                                                 {/* Mobile View - Name and Former Team */}
-                                                <div className="lg:hidden mt-6 text-center">
-                                                    <h2 className="text-2xl font-extrabold text-white mb-2">
+                                                <div className="lg:hidden mt-4 sm:mt-6 text-center">
+                                                    <h2 className="text-xl sm:text-2xl font-extrabold text-white mb-2 break-words px-2">
                                                         {liveAuctionPlayer ? liveAuctionPlayer.name : '-'}
                                                     </h2>
                                                     {liveAuctionPlayer?.previousYearTeam && (
-                                                        <div className="text-lg font-bold text-yellow-300">
+                                                        <div className="text-sm sm:text-base font-bold text-yellow-300 truncate px-2">
                                                             Formerly: {liveAuctionPlayer.previousYearTeam}
                                                         </div>
                                                     )}
@@ -530,23 +557,23 @@ const TournamentPage: React.FC = () => {
 
                                         {/* Right Column - Player Info */}
                                         <div className="lg:w-3/5">
-                                            <div className="bg-gradient-to-br from-[#2d3566]/90 to-[#1a223f]/90 rounded-2xl p-6 border-2 border-yellow-400/30 shadow-2xl h-full">
+                                            <div className="bg-gradient-to-br from-[#2d3566]/90 to-[#1a223f]/90 rounded-2xl p-4 sm:p-6 border-2 border-yellow-400/30 shadow-2xl h-full">
                                                 {/* Current Bid Section */}
-                                                <div className="mb-6">
-                                                    <div className="bg-gradient-to-r from-yellow-500/20 to-orange-500/20 rounded-xl p-6 border-2 border-yellow-400/40">
-                                                        <div className="flex flex-col md:flex-row justify-between items-center gap-4">
-                                                            <div className="text-center md:text-left">
-                                                                <div className="text-sm text-yellow-300 font-semibold mb-1">CURRENT BID</div>
-                                                                <div className="text-4xl font-bold text-white flex items-center gap-2">
-                                                                    <IndianRupee className="w-7 h-7 text-yellow-400" />
-                                                                    {liveAuctionPlayer ? getLiveAuctionBid(liveAuction) : '-'}
+                                                <div className="mb-4 sm:mb-6">
+                                                    <div className="bg-gradient-to-r from-yellow-500/20 to-orange-500/20 rounded-xl p-4 sm:p-6 border-2 border-yellow-400/40">
+                                                        <div className="flex flex-col md:flex-row justify-between items-center gap-3 sm:gap-4">
+                                                            <div className="text-center md:text-left w-full md:w-auto">
+                                                                <div className="text-xs sm:text-sm text-yellow-300 font-semibold mb-1">CURRENT BID</div>
+                                                                <div className="text-2xl sm:text-3xl md:text-4xl font-bold text-white flex items-center justify-center md:justify-start gap-1 sm:gap-2">
+                                                                    <IndianRupee className="w-5 h-5 sm:w-6 sm:h-6 md:w-7 md:h-7 text-yellow-400" />
+                                                                    <span className="truncate">{liveAuctionPlayer ? getLiveAuctionBid(liveAuction) : '-'}</span>
                                                                 </div>
                                                             </div>
-                                                            <div className="text-center md:text-right">
-                                                                <div className="text-sm text-yellow-300 font-semibold mb-1">LEADING BIDDER</div>
-                                                                <div className="text-2xl font-bold text-white flex items-center justify-center md:justify-end gap-2">
-                                                                    <Users className="w-5 h-5 text-green-400" />
-                                                                    {currentBidderTeam || "No Bids Yet"}
+                                                            <div className="text-center md:text-right w-full md:w-auto">
+                                                                <div className="text-xs sm:text-sm text-yellow-300 font-semibold mb-1">LEADING BIDDER</div>
+                                                                <div className="text-lg sm:text-xl md:text-2xl font-bold text-white flex items-center justify-center md:justify-end gap-1 sm:gap-2">
+                                                                    <Users className="w-4 h-4 sm:w-5 sm:h-5 text-green-400" />
+                                                                    <span className="truncate max-w-[200px]">{currentBidderTeam || "No Bids Yet"}</span>
                                                                 </div>
                                                             </div>
                                                         </div>
@@ -554,78 +581,78 @@ const TournamentPage: React.FC = () => {
                                                 </div>
 
                                                 {/* Stats Grid - Compact Layout */}
-                                                <div className="grid grid-cols-2 gap-3 mb-4">
-                                                    <div className="bg-gradient-to-br from-blue-500/10 to-cyan-500/10 rounded-xl p-3 border border-blue-400/30">
-                                                        <div className="flex items-center gap-2">
-                                                            <div className="bg-blue-500/20 p-2 rounded-lg">
-                                                                <Target className="w-4 h-4 text-blue-400" />
+                                                <div className="grid grid-cols-2 gap-2 sm:gap-3 mb-3 sm:mb-4">
+                                                    <div className="bg-gradient-to-br from-blue-500/10 to-cyan-500/10 rounded-xl p-2 sm:p-3 border border-blue-400/30">
+                                                        <div className="flex items-center gap-1 sm:gap-2">
+                                                            <div className="bg-blue-500/20 p-1.5 sm:p-2 rounded-lg">
+                                                                <Target className="w-3 h-3 sm:w-4 sm:h-4 text-blue-400" />
                                                             </div>
-                                                            <div>
-                                                                <div className="text-xs text-blue-300">Base Price</div>
-                                                                <div className="text-lg font-bold text-white">₹{liveAuctionPlayer?.basePrice ?? '-'}</div>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-
-                                                    <div className="bg-gradient-to-br from-green-500/10 to-emerald-500/10 rounded-xl p-3 border border-green-400/30">
-                                                        <div className="flex items-center gap-2">
-                                                            <div className="bg-green-500/20 p-2 rounded-lg">
-                                                                <Calendar className="w-4 h-4 text-green-400" />
-                                                            </div>
-                                                            <div>
-                                                                <div className="text-xs text-green-300">Age</div>
-                                                                <div className="text-lg font-bold text-white">{liveAuctionPlayer?.age || '-'}</div>
+                                                            <div className="min-w-0">
+                                                                <div className="text-xs text-blue-300 truncate">Base Price</div>
+                                                                <div className="text-base sm:text-lg font-bold text-white truncate">₹{liveAuctionPlayer?.basePrice ?? '-'}</div>
                                                             </div>
                                                         </div>
                                                     </div>
 
-                                                    <div className="bg-gradient-to-br from-purple-500/10 to-pink-500/10 rounded-xl p-3 border border-purple-400/30">
-                                                        <div className="flex items-center gap-2">
-                                                            <div className="bg-purple-500/20 p-2 rounded-lg">
-                                                                <Award className="w-4 h-4 text-purple-400" />
+                                                    <div className="bg-gradient-to-br from-green-500/10 to-emerald-500/10 rounded-xl p-2 sm:p-3 border border-green-400/30">
+                                                        <div className="flex items-center gap-1 sm:gap-2">
+                                                            <div className="bg-green-500/20 p-1.5 sm:p-2 rounded-lg">
+                                                                <Calendar className="w-3 h-3 sm:w-4 sm:h-4 text-green-400" />
                                                             </div>
-                                                            <div>
-                                                                <div className="text-xs text-purple-300">Station</div>
-                                                                <div className="text-lg font-bold text-white">{liveAuctionPlayer?.station || '-'}</div>
+                                                            <div className="min-w-0">
+                                                                <div className="text-xs text-green-300 truncate">Age</div>
+                                                                <div className="text-base sm:text-lg font-bold text-white truncate">{liveAuctionPlayer?.age || '-'}</div>
                                                             </div>
                                                         </div>
                                                     </div>
 
-                                                    <div className="bg-gradient-to-br from-red-500/10 to-orange-500/10 rounded-xl p-3 border border-red-400/30">
-                                                        <div className="flex items-center gap-2">
-                                                            <div className="bg-red-500/20 p-2 rounded-lg">
-                                                                <span className="text-sm">🏏</span>
+                                                    <div className="bg-gradient-to-br from-purple-500/10 to-pink-500/10 rounded-xl p-2 sm:p-3 border border-purple-400/30">
+                                                        <div className="flex items-center gap-1 sm:gap-2">
+                                                            <div className="bg-purple-500/20 p-1.5 sm:p-2 rounded-lg">
+                                                                <Award className="w-3 h-3 sm:w-4 sm:h-4 text-purple-400" />
                                                             </div>
-                                                            <div>
-                                                                <div className="text-xs text-red-300">Batting</div>
-                                                                <div className="text-lg font-bold text-white">{liveAuctionPlayer?.battingStyle || '-'}</div>
+                                                            <div className="min-w-0">
+                                                                <div className="text-xs text-purple-300 truncate">Station</div>
+                                                                <div className="text-base sm:text-lg font-bold text-white truncate">{liveAuctionPlayer?.station || '-'}</div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="bg-gradient-to-br from-red-500/10 to-orange-500/10 rounded-xl p-2 sm:p-3 border border-red-400/30">
+                                                        <div className="flex items-center gap-1 sm:gap-2">
+                                                            <div className="bg-red-500/20 p-1.5 sm:p-2 rounded-lg">
+                                                                <span className="text-xs sm:text-sm">🏏</span>
+                                                            </div>
+                                                            <div className="min-w-0">
+                                                                <div className="text-xs text-red-300 truncate">Batting</div>
+                                                                <div className="text-base sm:text-lg font-bold text-white truncate">{liveAuctionPlayer?.battingStyle || '-'}</div>
                                                             </div>
                                                         </div>
                                                     </div>
                                                 </div>
 
                                                 {/* Style Info */}
-                                                <div className="grid grid-cols-2 gap-3 mb-4">
-                                                    <div className="bg-gradient-to-br from-yellow-500/10 to-amber-500/10 rounded-xl p-3 border border-yellow-400/30">
+                                                <div className="grid grid-cols-2 gap-2 sm:gap-3 mb-3 sm:mb-4">
+                                                    <div className="bg-gradient-to-br from-yellow-500/10 to-amber-500/10 rounded-xl p-2 sm:p-3 border border-yellow-400/30">
                                                         <div className="text-center">
-                                                            <div className="text-xs text-yellow-300 mb-1">BOWLING STYLE</div>
-                                                            <div className="text-md font-bold text-white">{liveAuctionPlayer?.bowlingStyle || '-'}</div>
+                                                            <div className="text-xs text-yellow-300 mb-1 truncate">BOWLING STYLE</div>
+                                                            <div className="text-sm sm:text-md font-bold text-white truncate px-1">{liveAuctionPlayer?.bowlingStyle || '-'}</div>
                                                         </div>
                                                     </div>
 
-                                                    <div className="bg-gradient-to-br from-gray-500/10 to-gray-400/10 rounded-xl p-3 border border-gray-400/30">
+                                                    <div className="bg-gradient-to-br from-gray-500/10 to-gray-400/10 rounded-xl p-2 sm:p-3 border border-gray-400/30">
                                                         <div className="text-center">
-                                                            <div className="text-xs text-gray-300 mb-1">PLAYING ROLE</div>
-                                                            <div className="text-md font-bold text-white">{liveAuctionPlayer?.primaryRole || '-'}</div>
+                                                            <div className="text-xs text-gray-300 mb-1 truncate">PLAYING ROLE</div>
+                                                            <div className="text-sm sm:text-md font-bold text-white truncate px-1">{liveAuctionPlayer?.primaryRole || '-'}</div>
                                                         </div>
                                                     </div>
                                                 </div>
 
                                                 {/* Bid Status Bar */}
-                                                <div className="mt-6 p-3 bg-gradient-to-r from-yellow-500/10 via-orange-500/10 to-red-500/10 rounded-xl border border-yellow-400/30">
+                                                <div className="mt-4 sm:mt-6 p-2 sm:p-3 bg-gradient-to-r from-yellow-500/10 via-orange-500/10 to-red-500/10 rounded-xl border border-yellow-400/30">
                                                     <div className="text-center">
-                                                        <div className="text-sm text-yellow-300 mb-1">AUCTION STATUS</div>
-                                                        <div className="text-lg font-bold text-white">
+                                                        <div className="text-xs sm:text-sm text-yellow-300 mb-1">AUCTION STATUS</div>
+                                                        <div className="text-base sm:text-lg font-bold text-white truncate px-2">
                                                             {currentBidderTeam ? 'ACTIVE BIDDING' : 'WAITING FOR FIRST BID'}
                                                         </div>
                                                     </div>
@@ -634,10 +661,10 @@ const TournamentPage: React.FC = () => {
                                         </div>
                                     </div>
                                 ) : (
-                                    <div className="text-center py-12">
-                                        <div className="text-6xl mb-4">⏳</div>
-                                        <h3 className="text-2xl font-bold text-gray-300 mb-2">Waiting for next player</h3>
-                                        <p className="text-gray-400">No player on the auction table at the moment.</p>
+                                    <div className="text-center py-8 sm:py-12">
+                                        <div className="text-4xl sm:text-6xl mb-4">⏳</div>
+                                        <h3 className="text-xl sm:text-2xl font-bold text-gray-300 mb-2">Waiting for next player</h3>
+                                        <p className="text-gray-400 text-sm sm:text-base">No player on the auction table at the moment.</p>
                                     </div>
                                 )}
 
@@ -656,13 +683,13 @@ const TournamentPage: React.FC = () => {
                                         <div className={`relative transition-opacity duration-700 ${showSoldAnimation ? 'opacity-100 animate-fade-in-scale' : 'opacity-0'}`}
                                             style={{ pointerEvents: 'auto' }}>
                                             <Confetti width={window.innerWidth} height={window.innerHeight} numberOfPieces={300} recycle={false} />
-                                            <div className="bg-gradient-to-br from-emerald-500/90 to-green-400/90 rounded-3xl w-full max-w-2xl h-[400px] flex flex-col items-center justify-center border-4 border-emerald-400 shadow-2xl relative">
-                                                <div className="absolute -top-8">
-                                                    <Gavel className="w-16 h-16 text-yellow-300 mb-4 animate-gavel-slam drop-shadow-2xl" />
+                                            <div className="bg-gradient-to-br from-emerald-500/90 to-green-400/90 rounded-3xl w-[90vw] max-w-2xl h-[300px] sm:h-[350px] md:h-[400px] flex flex-col items-center justify-center border-4 border-emerald-400 shadow-2xl relative mx-4">
+                                                <div className="absolute -top-6 sm:-top-8">
+                                                    <Gavel className="w-12 h-12 sm:w-16 sm:h-16 text-yellow-300 mb-4 animate-gavel-slam drop-shadow-2xl" />
                                                 </div>
-                                                <span className="text-6xl font-extrabold text-white drop-shadow-2xl animate-pulse">SOLD!</span>
-                                                <span className="mt-4 text-2xl font-bold text-white animate-fade-in">Player Sold Successfully</span>
-                                                <div className="mt-6 text-lg text-emerald-100">
+                                                <span className="text-4xl sm:text-5xl md:text-6xl font-extrabold text-white drop-shadow-2xl animate-pulse text-center px-4">SOLD!</span>
+                                                <span className="mt-4 text-lg sm:text-xl md:text-2xl font-bold text-white animate-fade-in text-center px-4">Player Sold Successfully</span>
+                                                <div className="mt-4 sm:mt-6 text-base sm:text-lg text-emerald-100 text-center px-4 truncate max-w-full">
                                                     {currentBidderTeam && `To: ${currentBidderTeam}`}
                                                 </div>
                                             </div>
@@ -676,13 +703,13 @@ const TournamentPage: React.FC = () => {
                                         <div className="absolute inset-0 bg-black/70 backdrop-blur-sm transition-opacity duration-500" style={{ opacity: showUnsoldAnimation ? 1 : 0 }}></div>
                                         <div className={`relative transition-opacity duration-700 ${showUnsoldAnimation ? 'opacity-100 animate-fade-in-scale' : 'opacity-0'}`}
                                             style={{ pointerEvents: 'auto' }}>
-                                            <div className="bg-gradient-to-br from-red-500/90 to-orange-400/90 rounded-3xl w-full max-w-2xl h-[400px] flex flex-col items-center justify-center border-4 border-red-400 shadow-2xl relative">
-                                                <div className="absolute -top-8">
-                                                    <Gavel className="w-16 h-16 text-gray-300 mb-4 animate-gavel-slam drop-shadow-2xl" />
+                                            <div className="bg-gradient-to-br from-red-500/90 to-orange-400/90 rounded-3xl w-[90vw] max-w-2xl h-[300px] sm:h-[350px] md:h-[400px] flex flex-col items-center justify-center border-4 border-red-400 shadow-2xl relative mx-4">
+                                                <div className="absolute -top-6 sm:-top-8">
+                                                    <Gavel className="w-12 h-12 sm:w-16 sm:h-16 text-gray-300 mb-4 animate-gavel-slam drop-shadow-2xl" />
                                                 </div>
-                                                <span className="text-6xl font-extrabold text-white drop-shadow-2xl animate-pulse">UNSOLD!</span>
-                                                <span className="mt-4 text-2xl font-bold text-white animate-fade-in">Player Remains Unsold</span>
-                                                <div className="mt-6 text-lg text-red-100">
+                                                <span className="text-4xl sm:text-5xl md:text-6xl font-extrabold text-white drop-shadow-2xl animate-pulse text-center px-4">UNSOLD!</span>
+                                                <span className="mt-4 text-lg sm:text-xl md:text-2xl font-bold text-white animate-fade-in text-center px-4">Player Remains Unsold</span>
+                                                <div className="mt-4 sm:mt-6 text-base sm:text-lg text-red-100 text-center px-4">
                                                     No bids received
                                                 </div>
                                             </div>
@@ -860,7 +887,7 @@ const TournamentPage: React.FC = () => {
                                 <div className="flex justify-between items-center mb-4">
                                     <div className="text-xs text-gray-400 mb-2">Last updated: {lastUpdated ? lastUpdated.toLocaleTimeString() : '-'}</div>
                                     <button
-                                        className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 transition"
+                                        className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 transition text-sm"
                                         onClick={() => {
                                             setTeamsLoading(true);
                                             setTeamPlayers({});
