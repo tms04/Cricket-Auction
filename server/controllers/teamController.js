@@ -26,6 +26,44 @@ exports.getAllTeams = async (req, res) => {
             .select('name budget remainingBudget players tournamentId color logo owner')
             .lean(); // Use lean() for read-only queries
 
+        // Calculate maxBid for each team if tournamentId is provided
+        if (req.query.tournamentId && teams.length > 0) {
+            // Fetch tournament details once for all teams
+            const tournament = await Tournament.findById(req.query.tournamentId)
+                .select('minTeamSize categories')
+                .lean();
+            
+            if (tournament) {
+                const minTeamSize = tournament.minTeamSize || 0;
+                
+                // Calculate minimum base price from tournament categories (minBalance)
+                const minBasePriceInTournament = tournament.categories && tournament.categories.length > 0
+                    ? Math.min(...tournament.categories
+                        .map(cat => cat.minBalance || 0)
+                        .filter(v => v > 0))
+                    : 0;
+
+                // Calculate maxBid for each team
+                teams.forEach(team => {
+                    const remainingBudget = Number(team.remainingBudget) || 0;
+                    // Count unique players to handle any duplicates in the array
+                    const uniquePlayerIds = Array.isArray(team.players) 
+                        ? new Set(team.players.map(p => String(p))).size 
+                        : 0;
+                    const playersTaken = uniquePlayerIds;
+                    
+                    let maxBid = null;
+                    if (minTeamSize > 0 && minBasePriceInTournament > 0) {
+                        const remainingMandatorySlots = Math.max(minTeamSize - playersTaken - 1, 0);
+                        maxBid = remainingBudget - remainingMandatorySlots * minBasePriceInTournament;
+                        if (maxBid < 0) maxBid = 0;
+                    }
+                    
+                    team.maxBid = maxBid;
+                });
+            }
+        }
+
         const total = await Team.countDocuments(filter);
         res.json({ teams, total });
     } catch (err) {

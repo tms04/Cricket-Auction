@@ -36,6 +36,7 @@ export interface Team {
   color: string;
   logo?: string;
   totalBudget: number;
+  maxBid?: number | null; // Calculated in backend: max bid considering remaining budget and mandatory slots
 }
 
 export interface Player {

@@ -233,19 +233,23 @@ exports.completeAuction = async (req, res) => {
             });
         }
         if (winnerId) {
-            console.time("findTeam");
-            // Cannot use lean() here because we need to save the team
-            const team = await Team.findById(winnerId);
-            console.timeEnd("findTeam");
-            if (!team) return res.status(404).json({ error: 'Winning team not found' });
-
             const saleAmount = finalAmount || auction.bidAmount;
 
-            // Prepare team update
-            team.remainingBudget -= saleAmount;
-            team.players.push(auction.player);
-            teamPromise = team.save();
-            updatedTeam = team;
+            // Use MongoDB $addToSet and $inc for atomic update
+            // $addToSet prevents duplicates automatically at database level (more efficient)
+            // $inc updates budget atomically (prevents race conditions)
+            // This eliminates the need for manual duplicate checking
+            updatedTeam = await Team.findByIdAndUpdate(
+                winnerId,
+                {
+                    $inc: { remainingBudget: -saleAmount },
+                    $addToSet: { players: auction.player }
+                },
+                { new: true } // Return updated document
+            );
+            
+            if (!updatedTeam) return res.status(404).json({ error: 'Winning team not found' });
+            teamPromise = Promise.resolve(); // Already saved above
 
             // Prepare player update
             participation.status = 'sold';
@@ -256,7 +260,7 @@ exports.completeAuction = async (req, res) => {
             // Update auction
             auction.status = 'sold';
             auction.winner = winnerId;
-            auction.winnerName = team.name; // Store winner's team name
+            auction.winnerName = updatedTeam.name; // Store winner's team name
             auction.finalAmount = saleAmount;
             auction.bidAmount = saleAmount;
         } else {
@@ -279,7 +283,7 @@ exports.completeAuction = async (req, res) => {
 
         console.time("saveAuction");
         const auctionPromise = auction.save();
-        // Save all in parallel
+        // Save participation and auction (team already saved with $addToSet)
         await Promise.all([teamPromise, participation.save(), auctionPromise].filter(Boolean));
         console.timeEnd("saveAuction");
 

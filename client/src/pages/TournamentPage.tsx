@@ -47,8 +47,6 @@ const TournamentPage: React.FC = () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const [teamPlayers, setTeamPlayers] = useState<{ [teamId: string]: any[] }>({});
     const [teamPlayersLoading, setTeamPlayersLoading] = useState<{ [teamId: string]: boolean }>({});
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const [tournamentDetails, setTournamentDetails] = useState<any>(null);
     const tabRef = useRef<'live' | 'sold' | 'available' | 'unsold' | 'teams'>('live');
 
     useEffect(() => {
@@ -64,16 +62,12 @@ const TournamentPage: React.FC = () => {
                         status: data.status,
                         logo: data.logo || data.photo || undefined,
                     });
-                    // Store full tournament details for Max Bid calculation
-                    setTournamentDetails(data);
                 } else {
                     setTournament(null);
-                    setTournamentDetails(null);
                 }
             })
             .catch(() => {
                 setTournament(null);
-                setTournamentDetails(null);
             })
             .finally(() => setLoading(false));
     }, [id, API_BASE]);
@@ -498,17 +492,19 @@ const TournamentPage: React.FC = () => {
                                                     </div>
                                                 </div>
 
-                                                {/* Player Photo */}
+                                                {/* Player Photo - UPDATED FOR ASPECT RATIO */}
                                                 <div className="mt-6 sm:mt-8 flex justify-center">
                                                     {liveAuctionPlayer?.photo ? (
                                                         <div className="relative group w-full max-w-xs sm:max-w-md">
                                                             <div className="absolute inset-0 bg-gradient-to-r from-yellow-400 to-orange-400 rounded-2xl blur-xl opacity-50 group-hover:opacity-70 transition-opacity"></div>
-                                                            <img
-                                                                src={liveAuctionPlayer.photo}
-                                                                alt={liveAuctionPlayer.name}
-                                                                className="relative w-full h-[200px] sm:h-[240px] md:h-[280px] object-cover rounded-xl border-4 border-yellow-300/80 shadow-2xl transform group-hover:scale-[1.02] transition-transform duration-300"
-                                                                style={{ background: 'transparent' }}
-                                                            />
+                                                            <div className="relative w-full max-w-xs sm:max-w-md h-[200px] sm:h-[240px] md:h-[280px] flex items-center justify-center rounded-xl border-4 border-yellow-300/80 shadow-2xl overflow-hidden bg-gradient-to-br from-yellow-100/20 to-orange-100/20">
+                                                                <img
+                                                                    src={liveAuctionPlayer.photo}
+                                                                    alt={liveAuctionPlayer.name}
+                                                                    className="max-h-full max-w-full object-contain p-2 transform group-hover:scale-[1.02] transition-transform duration-300"
+                                                                    style={{ background: 'transparent' }}
+                                                                />
+                                                            </div>
                                                         </div>
                                                     ) : (
                                                         <div className="flex items-center justify-center w-full max-w-xs sm:max-w-md h-[200px] sm:h-[240px] md:h-[280px] bg-gradient-to-br from-yellow-100 to-orange-100 rounded-2xl border-4 border-yellow-300 shadow-2xl">
@@ -917,33 +913,8 @@ const TournamentPage: React.FC = () => {
                                 ) : (
                                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                                         {teams.map(team => {
-                                            // Calculate Max Bid for this team
-                                            const toNumber = (value?: number | string | null) => {
-                                                if (typeof value === 'number') return value;
-                                                if (typeof value === 'string') {
-                                                    const parsed = Number(value);
-                                                    return Number.isNaN(parsed) ? 0 : parsed;
-                                                }
-                                                return 0;
-                                            };
-
-                                            const remainingBudget = toNumber(team.remainingBudget);
-                                            const playersTaken = (teamPlayers[team._id] || []).length;
-                                            const minTeamSize = toNumber(tournamentDetails?.minTeamSize);
-
-                                            // Calculate minimum base price from tournament categories (minBalance)
-                                            const categories = tournamentDetails?.categories || [];
-                                            const minBalances = categories
-                                                .map((cat: any) => toNumber(cat.minBalance))
-                                                .filter((v: number) => v > 0);
-                                            const minBasePriceInTournament = minBalances.length > 0 ? Math.min(...minBalances) : 0;
-
-                                            let maxBid: number | null = null;
-                                            if (minTeamSize > 0 && minBasePriceInTournament > 0) {
-                                                const remainingMandatorySlots = Math.max(minTeamSize - playersTaken - 1, 0);
-                                                maxBid = remainingBudget - remainingMandatorySlots * minBasePriceInTournament;
-                                                if (maxBid < 0) maxBid = 0;
-                                            }
+                                            // Max Bid is now calculated in the backend and included in team.maxBid
+                                            const maxBid = team.maxBid !== undefined ? team.maxBid : null;
 
                                             return (
                                                 <div key={team._id} className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow">
