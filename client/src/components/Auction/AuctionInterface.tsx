@@ -64,7 +64,7 @@ const AuctionInterface: React.FC = () => {
   );
   const availablePlayers = useMemo(
     () => players.filter(p =>
-      (p.status === 'available' || p.status === 'unsold') && p.tournamentId === myTournament?.id
+      (p.status === 'available' || p.status === 'unsold' || p.status === 'unsold1') && p.tournamentId === myTournament?.id
     ),
     [players, myTournament?.id]
   );
