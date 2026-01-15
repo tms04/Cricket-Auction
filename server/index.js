@@ -13,9 +13,9 @@ dotenv.config();
 
 // Cloudinary configuration
 cloudinary.config({
-    cloud_name: 'dviulhflk',
-    api_key: '899555547873116',
-    api_secret: 'zY61vhsE09h1UHtWw5m6Y6O532o'
+    cloud_name: 'dovjt4m1h',
+    api_key: '734943383261482',
+    api_secret: 'WrXh_lz77HLu5ziuH7TCcnlqqGE'
 });
 
 const app = express();
