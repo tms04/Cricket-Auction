@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const Player = require('../models/player');
 const PlayerTournament = require('../models/playerTournament');
 const Tournament = require('../models/tournament');
@@ -146,7 +147,7 @@ exports.getAllPlayers = async (req, res) => {
             .skip(skip)
             .limit(limit)
             .lean(); // Use lean() for better performance
-        
+
         const participations = await populateParticipation(participationQuery);
 
         let playersWithTeamName;
@@ -573,6 +574,69 @@ exports.getPlayerSummaries = async (req, res) => {
         res.json(summaries);
     } catch (err) {
         res.status(500).json({ error: 'Server error' });
+    }
+};
+
+// Public: fetch only display-safe fields for a tournament
+exports.getPublicPlayersByTournament = async (req, res) => {
+    res.set('Cache-Control', 'no-store');
+    try {
+        const { tournamentId } = req.params;
+        if (!tournamentId || !mongoose.Types.ObjectId.isValid(tournamentId)) {
+            return res.status(400).json({ error: 'Invalid tournamentId' });
+        }
+
+        const participationQuery = PlayerTournament.find({ tournamentId })
+            .select('player category basePrice')
+            .populate({ path: 'player', select: 'name photo age station primaryRole battingStyle bowlingStyle role basePrice' })
+            .sort({ createdAt: 1 })
+            .lean();
+
+        const participations = await participationQuery;
+
+        if (!participations.length) {
+            // Legacy fallback if participation entries do not exist yet
+            const players = await Player.find({ tournamentId })
+                .select('name photo age station primaryRole battingStyle bowlingStyle role category basePrice')
+                .sort({ createdAt: 1 })
+                .lean();
+            return res.json(players.map(player => ({
+                id: player._id,
+                playerId: player._id,
+                name: player.name,
+                photo: player.photo,
+                age: player.age,
+                category: player.category,
+                station: player.station,
+                primaryRole: player.primaryRole,
+                battingStyle: player.battingStyle,
+                bowlingStyle: player.bowlingStyle,
+                role: player.role,
+                basePrice: player.basePrice
+            })));
+        }
+
+        const safePlayers = participations.map(participation => {
+            const player = participation.player || {};
+            return {
+                id: player._id || participation.player,
+                playerId: player._id || participation.player,
+                name: player.name || 'Unnamed Player',
+                photo: player.photo,
+                age: player.age,
+                category: participation.category,
+                station: player.station,
+                primaryRole: player.primaryRole,
+                battingStyle: player.battingStyle,
+                bowlingStyle: player.bowlingStyle,
+                role: player.role,
+                basePrice: participation.basePrice ?? player.basePrice
+            };
+        });
+
+        res.json(safePlayers);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
     }
 };
 

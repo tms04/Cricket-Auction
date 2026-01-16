@@ -12,6 +12,7 @@ import AuctionInterface from './components/Auction/AuctionInterface';
 import LandingPage from './pages/LandingPage';
 import ViewerPage from './pages/ViewerPage';
 import TournamentPage from './pages/TournamentPage';
+import CheckPlayersPage from './pages/CheckPlayersPage';
 
 const Dashboard: React.FC = () => {
   const { user } = useAuth();
@@ -112,6 +113,7 @@ const App: React.FC = () => {
             <Route path="/login" element={<LoginForm />} />
             <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
             <Route path="/tournament/:id" element={<TournamentPage />} />
+            <Route path="/check/:tournamentId" element={<CheckPlayersPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </Router>

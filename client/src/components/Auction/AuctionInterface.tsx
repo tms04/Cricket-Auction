@@ -75,15 +75,15 @@ const AuctionInterface: React.FC = () => {
   }, [myTournament?.categories, players]);
 
   // Minimum base price from tournament categories (minBalance)
-  const minBasePriceInTournament = useMemo(() => {
-    if (!myTournament) return 0;
-    const categories = myTournament.categories || [];
-    const minBalances = categories
-      .map(cat => toNumber(cat.minBalance))
-      .filter(v => v > 0);
-    if (!minBalances.length) return 0;
-    return Math.min(...minBalances);
-  }, [myTournament]);
+  // const minBasePriceInTournament = useMemo(() => {
+  //   if (!myTournament) return 0;
+  //   const categories = myTournament.categories || [];
+  //   const minBalances = categories
+  //     .map(cat => toNumber(cat.minBalance))
+  //     .filter(v => v > 0);
+  //   if (!minBalances.length) return 0;
+  //   return Math.min(...minBalances);
+  // }, [myTournament]);
 
   // Show notification helper
   const showNotification = useCallback((type: 'success' | 'error' | 'info', message: string) => {
@@ -664,7 +664,7 @@ const AuctionInterface: React.FC = () => {
                         step="100000"
                       />
                       <div className="flex flex-wrap gap-2 mt-2">
-                        {[10000, 20000, 50000, 100000].map((inc) => (
+                        {[1500, 3000, 5000, 10000, 20000, 50000, 100000].map((inc) => (
                           <button
                             key={inc}
                             type="button"
@@ -792,16 +792,36 @@ const AuctionInterface: React.FC = () => {
               const usedPercentage = ((totalBudget - remainingBudget) / totalBudget) * 100;
               const safeColor = team.color || '#888';
 
-              // Max Bid calculation:
+              // Max Bid calculation (previous formula):
               // maxBid = remainingBudget - ((minTeamSize - playersTaken - 1) * minBasePriceInTournament)
               const playersTaken = (soldPlayersByTeam[team.id] || []).length;
-              const minTeamSize = toNumber(myTournament?.minTeamSize);
+              // const minTeamSize = toNumber(myTournament?.minTeamSize);
               let maxBid: number | null = null;
-              if (minTeamSize > 0 && minBasePriceInTournament > 0) {
-                const remainingMandatorySlots = Math.max(minTeamSize - playersTaken - 1, 0);
-                maxBid = remainingBudget - remainingMandatorySlots * minBasePriceInTournament;
-                if (maxBid < 0) maxBid = 0;
-              }
+              // if (minTeamSize > 0 && minBasePriceInTournament > 0) {
+              //   const remainingMandatorySlots = Math.max(minTeamSize - playersTaken - 1, 0);
+              //   maxBid = remainingBudget - remainingMandatorySlots * minBasePriceInTournament;
+              //   if (maxBid < 0) maxBid = 0;
+              // }
+
+              const holdbackByPlayersTaken: Record<number, number> = {
+                0: 29000,
+                1: 29000,
+                2: 24000,
+                3: 21000,
+                4: 18000,
+                5: 15000,
+                6: 12000,
+                7: 9000,
+                8: 6000,
+                9: 4500,
+                10: 3000,
+                11: 1500,
+                12: 0,
+                13: 0
+              };
+              const holdback = holdbackByPlayersTaken[playersTaken] ?? 0;
+              maxBid = remainingBudget - holdback;
+              if (maxBid < 0) maxBid = 0;
 
               return (
                 <div key={team.id} className="mb-4 bg-white rounded-lg shadow-sm border-2 p-4 transition-all duration-200 hover:shadow-md"

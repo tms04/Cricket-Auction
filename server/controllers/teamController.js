@@ -32,10 +32,10 @@ exports.getAllTeams = async (req, res) => {
             const tournament = await Tournament.findById(req.query.tournamentId)
                 .select('minTeamSize categories')
                 .lean();
-            
+
             if (tournament) {
                 const minTeamSize = tournament.minTeamSize || 0;
-                
+
                 // Calculate minimum base price from tournament categories (minBalance)
                 const minBasePriceInTournament = tournament.categories && tournament.categories.length > 0
                     ? Math.min(...tournament.categories
@@ -47,18 +47,39 @@ exports.getAllTeams = async (req, res) => {
                 teams.forEach(team => {
                     const remainingBudget = Number(team.remainingBudget) || 0;
                     // Count unique players to handle any duplicates in the array
-                    const uniquePlayerIds = Array.isArray(team.players) 
-                        ? new Set(team.players.map(p => String(p))).size 
+                    const uniquePlayerIds = Array.isArray(team.players)
+                        ? new Set(team.players.map(p => String(p))).size
                         : 0;
                     const playersTaken = uniquePlayerIds;
-                    
+
                     let maxBid = null;
-                    if (minTeamSize > 0 && minBasePriceInTournament > 0) {
-                        const remainingMandatorySlots = Math.max(minTeamSize - playersTaken - 1, 0);
-                        maxBid = remainingBudget - remainingMandatorySlots * minBasePriceInTournament;
-                        if (maxBid < 0) maxBid = 0;
-                    }
-                    
+                    // Previous formula (kept for reference):
+                    // if (minTeamSize > 0 && minBasePriceInTournament > 0) {
+                    //     const remainingMandatorySlots = Math.max(minTeamSize - playersTaken - 1, 0);
+                    //     maxBid = remainingBudget - remainingMandatorySlots * minBasePriceInTournament;
+                    //     if (maxBid < 0) maxBid = 0;
+                    // }
+
+                    const holdbackByPlayersTaken = {
+                        0: 29000,
+                        1: 29000,
+                        2: 24000,
+                        3: 21000,
+                        4: 18000,
+                        5: 15000,
+                        6: 12000,
+                        7: 9000,
+                        8: 6000,
+                        9: 4500,
+                        10: 3000,
+                        11: 1500,
+                        12: 0,
+                        13: 0
+                    };
+                    const holdback = holdbackByPlayersTaken[playersTaken] ?? 0;
+                    maxBid = remainingBudget - holdback;
+                    if (maxBid < 0) maxBid = 0;
+
                     team.maxBid = maxBid;
                 });
             }
@@ -92,12 +113,12 @@ exports.createTeam = async (req, res) => {
                 return res.status(403).json({ error: 'Forbidden: You can only create teams for your assigned tournament.' });
             }
         }
-        
+
         // Ensure logo is a URL, not base64
         if (req.body.logo && req.body.logo.startsWith('data:')) {
             return res.status(400).json({ error: 'Base64 images are not supported. Please upload images to Cloudinary.' });
         }
-        
+
         const newTeam = new Team(req.body);
         const savedTeam = await newTeam.save();
         // Remove unnecessary refetch - just return the saved team
@@ -116,12 +137,12 @@ exports.updateTeam = async (req, res) => {
                 return res.status(403).json({ error: 'Forbidden: You can only update teams for your assigned tournament.' });
             }
         }
-        
+
         // Ensure logo is a URL, not base64
         if (req.body.logo && req.body.logo.startsWith('data:')) {
             return res.status(400).json({ error: 'Base64 images are not supported. Please upload images to Cloudinary.' });
         }
-        
+
         // Optimize: Only populate player names if needed, use lean() for response
         const updatedTeam = await Team.findByIdAndUpdate(req.params.id, req.body, { new: true })
             .populate('players', 'name photo age role') // Only get essential player fields

@@ -11,6 +11,7 @@ router.post('/revertUnsoldCategory', authMiddleware, roleMiddleware(['auctioneer
 router.post('/revertUnsold1Category', authMiddleware, roleMiddleware(['auctioneer', 'master']), playerController.revertUnsold1CategoryToUnsold);
 router.get('/duplicates/check', authMiddleware, roleMiddleware(['master', 'auctioneer']), playerController.checkDuplicatePlayerName);
 router.get('/summaries', optionalAuth, playerController.getPlayerSummaries);
+router.get('/check/:tournamentId', playerController.getPublicPlayersByTournament);
 router.get('/:id', optionalAuth, playerController.getPlayer);
 router.post('/', authMiddleware, roleMiddleware(['master', 'auctioneer']), playerController.createPlayer);
 router.put('/:id', authMiddleware, roleMiddleware(['master', 'auctioneer']), playerController.updatePlayer);

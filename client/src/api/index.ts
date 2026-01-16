@@ -216,6 +216,12 @@ export const fetchPlayerSummaries = async (tournamentId?: string): Promise<Playe
     return res.data.map(mapPlayer);
 };
 
+// Public: fetch display-safe player cards for a tournament
+export const fetchPublicPlayersByTournament = async (tournamentId: string): Promise<Player[]> => {
+    const res = await axios.get<RawPlayer[]>(`${API_BASE}/players/check/${tournamentId}`);
+    return res.data.map(mapPlayer);
+};
+
 export const checkDuplicatePlayerName = async (name: string): Promise<Player[]> => {
     const params = new URLSearchParams({ name });
     const res = await axios.get<RawPlayer[]>(`${API_BASE}/players/duplicates/check?${params.toString()}`, {
