@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import { Gavel, Menu, X, IndianRupee, Users, Target, Calendar, Award, Home, User } from 'lucide-react';
 import Confetti from 'react-confetti';
@@ -40,6 +40,7 @@ const TournamentPage: React.FC = () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const [tabPlayers, setTabPlayers] = useState<any[]>([]);
     const [tabPlayersLoading, setTabPlayersLoading] = useState(false);
+    const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const [teams, setTeams] = useState<any[]>([]);
     const [teamsLoading, setTeamsLoading] = useState(false);
@@ -251,6 +252,28 @@ const TournamentPage: React.FC = () => {
                 .finally(() => setTabPlayersLoading(false));
         }
     }, [tab, tournament?.id, API_BASE]);
+
+    const categoryOptions = useMemo(() => {
+        const categories = tabPlayers
+            .map(player => player.category)
+            .filter((value): value is string => Boolean(value));
+        return Array.from(new Set(categories)).sort((a, b) => a.localeCompare(b));
+    }, [tabPlayers]);
+
+    useEffect(() => {
+        if (categoryOptions.length === 0) {
+            setSelectedCategory(null);
+            return;
+        }
+        if (!selectedCategory || !categoryOptions.includes(selectedCategory)) {
+            setSelectedCategory(categoryOptions[0]);
+        }
+    }, [categoryOptions, selectedCategory]);
+
+    const filteredTabPlayers = useMemo(() => {
+        if (!selectedCategory) return tabPlayers;
+        return tabPlayers.filter(player => player.category === selectedCategory);
+    }, [tabPlayers, selectedCategory]);
 
     // --- Fetch teams for Teams & Players tab ---
     useEffect(() => {
@@ -718,11 +741,29 @@ const TournamentPage: React.FC = () => {
                         {/* Other tabs remain the same */}
                         {tab === 'available' && (
                             <div className="relative">
-                                <div className="text-xs text-gray-500 mb-4 flex justify-between items-center">
+                                <div className="text-xs text-gray-500 mb-4 flex flex-wrap gap-3 justify-between items-center">
                                     <span>Last updated: {lastUpdated ? lastUpdated.toLocaleTimeString() : '-'}</span>
-                                    <span className="bg-yellow-100 text-yellow-800 text-xs px-2 py-1 rounded-full">
-                                        {tabPlayers.length} players available
-                                    </span>
+                                    <div className="flex items-center gap-3">
+                                        <select
+                                            value={selectedCategory ?? ''}
+                                            onChange={(event) => setSelectedCategory(event.target.value)}
+                                            disabled={categoryOptions.length === 0}
+                                            className="text-xs border border-gray-200 rounded-full px-3 py-1 bg-white text-gray-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-yellow-400"
+                                        >
+                                            {categoryOptions.length === 0 ? (
+                                                <option value="">No categories</option>
+                                            ) : (
+                                                categoryOptions.map(category => (
+                                                    <option key={category} value={category}>
+                                                        {category}
+                                                    </option>
+                                                ))
+                                            )}
+                                        </select>
+                                        <span className="bg-yellow-100 text-yellow-800 text-xs px-2 py-1 rounded-full">
+                                            {filteredTabPlayers.length} players available
+                                        </span>
+                                    </div>
                                 </div>
 
                                 {tabPlayersLoading ? (
@@ -732,7 +773,7 @@ const TournamentPage: React.FC = () => {
                                     </div>
                                 ) : (
                                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                                        {tabPlayers.map(player => (
+                                        {filteredTabPlayers.map(player => (
                                             <div
                                                 key={player._id}
                                                 className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-300 group"
@@ -768,11 +809,29 @@ const TournamentPage: React.FC = () => {
 
                         {tab === 'sold' && (
                             <div className="relative">
-                                <div className="text-xs text-gray-500 mb-4 flex justify-between items-center">
+                                <div className="text-xs text-gray-500 mb-4 flex flex-wrap gap-3 justify-between items-center">
                                     <span>Last updated: {lastUpdated ? lastUpdated.toLocaleTimeString() : '-'}</span>
-                                    <span className="bg-red-100 text-red-800 text-xs px-2 py-1 rounded-full">
-                                        {tabPlayers.length} players sold
-                                    </span>
+                                    <div className="flex items-center gap-3">
+                                        <select
+                                            value={selectedCategory ?? ''}
+                                            onChange={(event) => setSelectedCategory(event.target.value)}
+                                            disabled={categoryOptions.length === 0}
+                                            className="text-xs border border-gray-200 rounded-full px-3 py-1 bg-white text-gray-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-red-400"
+                                        >
+                                            {categoryOptions.length === 0 ? (
+                                                <option value="">No categories</option>
+                                            ) : (
+                                                categoryOptions.map(category => (
+                                                    <option key={category} value={category}>
+                                                        {category}
+                                                    </option>
+                                                ))
+                                            )}
+                                        </select>
+                                        <span className="bg-red-100 text-red-800 text-xs px-2 py-1 rounded-full">
+                                            {filteredTabPlayers.length} players sold
+                                        </span>
+                                    </div>
                                 </div>
 
                                 {tabPlayersLoading ? (
@@ -782,7 +841,7 @@ const TournamentPage: React.FC = () => {
                                     </div>
                                 ) : (
                                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                                        {tabPlayers.map(player => (
+                                        {filteredTabPlayers.map(player => (
                                             <div
                                                 key={player._id}
                                                 className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-300 group"
@@ -821,11 +880,29 @@ const TournamentPage: React.FC = () => {
 
                         {tab === 'unsold' && (
                             <div className="relative">
-                                <div className="text-xs text-gray-500 mb-4 flex justify-between items-center">
+                                <div className="text-xs text-gray-500 mb-4 flex flex-wrap gap-3 justify-between items-center">
                                     <span>Last updated: {lastUpdated ? lastUpdated.toLocaleTimeString() : '-'}</span>
-                                    <span className="bg-gray-200 text-gray-800 text-xs px-2 py-1 rounded-full">
-                                        {tabPlayers.length} players unsold
-                                    </span>
+                                    <div className="flex items-center gap-3">
+                                        <select
+                                            value={selectedCategory ?? ''}
+                                            onChange={(event) => setSelectedCategory(event.target.value)}
+                                            disabled={categoryOptions.length === 0}
+                                            className="text-xs border border-gray-200 rounded-full px-3 py-1 bg-white text-gray-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-gray-400"
+                                        >
+                                            {categoryOptions.length === 0 ? (
+                                                <option value="">No categories</option>
+                                            ) : (
+                                                categoryOptions.map(category => (
+                                                    <option key={category} value={category}>
+                                                        {category}
+                                                    </option>
+                                                ))
+                                            )}
+                                        </select>
+                                        <span className="bg-gray-200 text-gray-800 text-xs px-2 py-1 rounded-full">
+                                            {filteredTabPlayers.length} players unsold
+                                        </span>
+                                    </div>
                                 </div>
 
                                 {tabPlayersLoading ? (
@@ -835,7 +912,7 @@ const TournamentPage: React.FC = () => {
                                     </div>
                                 ) : (
                                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                                        {tabPlayers.map(player => (
+                                        {filteredTabPlayers.map(player => (
                                             <div
                                                 key={player._id}
                                                 className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-300 group"
