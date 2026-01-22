@@ -1,12 +1,13 @@
 const mongoose = require('mongoose');
 const cloudinary = require('cloudinary').v2;
-require('dotenv').config();
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 
 // Cloudinary configuration
 cloudinary.config({
-    cloud_name: 'dviulhflk',
-    api_key: '899555547873116',
-    api_secret: 'zY61vhsE09h1UHtWw5m6Y6O532o'
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+    api_key: process.env.CLOUDINARY_API_KEY,
+    api_secret: process.env.CLOUDINARY_API_SECRET
 });
 
 // Connect to MongoDB

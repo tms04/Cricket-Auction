@@ -9,13 +9,13 @@ const socketIo = require('socket.io');
 const cloudinary = require('cloudinary').v2;
 
 // Load environment variables from .env file
-dotenv.config();
+dotenv.config({ path: path.join(__dirname, '.env') });
 
 // Cloudinary configuration
 cloudinary.config({
-    cloud_name: 'dovjt4m1h',
-    api_key: '734943383261482',
-    api_secret: 'WrXh_lz77HLu5ziuH7TCcnlqqGE'
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+    api_key: process.env.CLOUDINARY_API_KEY,
+    api_secret: process.env.CLOUDINARY_API_SECRET
 });
 
 const app = express();
