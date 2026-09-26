@@ -1,7 +1,8 @@
 import axios from 'axios';
 import { Tournament, Team, Player, AuctionItem } from '../types';
 
-const BASE_URL = import.meta.env.VITE_API_URL || 'https://bidkaroo.techgg.org';
+const BASE_URL =
+    import.meta.env.VITE_API_URL || 'https://cricket-auction-yvh3.onrender.com';
 const API_BASE = BASE_URL.endsWith('/api') ? BASE_URL : `${BASE_URL}/api`;
 
 type RawWithId<T> = Omit<T, 'id'> & { _id?: string; id?: string };
@@ -93,6 +94,11 @@ export const createTeam = async (data: Partial<Team>): Promise<Team> => {
 
 export const updateTeam = async (id: string, data: Partial<Team>): Promise<Team> => {
     const res = await axios.put<RawTeam>(`${API_BASE}/teams/${id}`, data, { headers: authHeader() });
+    return mapTeam(res.data);
+};
+
+export const updateTeamBudget = async (id: string, budget: number): Promise<Team> => {
+    const res = await axios.patch<RawTeam>(`${API_BASE}/teams/${id}/budget`, { budget }, { headers: authHeader() });
     return mapTeam(res.data);
 };
 

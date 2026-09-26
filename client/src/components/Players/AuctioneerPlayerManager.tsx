@@ -481,35 +481,46 @@ const AuctioneerPlayerManager: React.FC = () => {
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">Primary Role</label>
-                                    <input
-                                        type="text"
+                                    <select
                                         value={formData.primaryRole}
                                         onChange={e => setFormData({ ...formData, primaryRole: e.target.value })}
                                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                                        placeholder="Enter primary role"
-                                    />
+                                        required
+                                    >
+                                        <option value="">Select primary role</option>
+                                        <option value="Batsman">Batsman</option>
+                                        <option value="Bowler">Bowler</option>
+                                        <option value="All-rounder">All-rounder</option>
+                                    </select>
                                 </div>
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">Batting Style</label>
-                                    <input
-                                        type="text"
+                                    <select
                                         value={formData.battingStyle}
                                         onChange={e => setFormData({ ...formData, battingStyle: e.target.value })}
                                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                                        placeholder="Enter batting style"
-                                    />
+                                        required
+                                    >
+                                        <option value="">Select batting style</option>
+                                        <option value="Right hand batsman">Right hand batsman</option>
+                                        <option value="Left hand batsman">Left hand batsman</option>
+                                    </select>
                                 </div>
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">Bowling Style</label>
-                                    <input
-                                        type="text"
+                                    <select
                                         value={formData.bowlingStyle}
                                         onChange={e => setFormData({ ...formData, bowlingStyle: e.target.value })}
                                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                                        placeholder="Enter bowling style"
-                                    />
+                                        required
+                                    >
+                                        <option value="">Select bowling style</option>
+                                        <option value="Right hand bowler">Right hand bowler</option>
+                                        <option value="Left hand bowler">Left hand bowler</option>
+                                        <option value="Dont bowl">Dont bowl</option>
+                                    </select>
                                 </div>
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">Photo</label>

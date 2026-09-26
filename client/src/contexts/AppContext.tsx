@@ -194,11 +194,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const addPlayer = async (player: Omit<Player, 'id'>) => {
-    console.log('AppContext - Creating player with data:', player);
-    console.log('AppContext - Photo URL being sent:', player.photo);
     const newPlayer = await api.createPlayer(player);
-    console.log('AppContext - Player created, response:', newPlayer);
-    console.log('AppContext - Photo URL in response:', newPlayer.photo);
     await refreshPlayersState();
     return newPlayer;
   };
@@ -294,7 +290,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="w-8 h-8 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading auction system...</p>
+          <p className="text-gray-600">Next Player coming up in 3.. 2.. 1..</p>
         </div>
       </div>
     );

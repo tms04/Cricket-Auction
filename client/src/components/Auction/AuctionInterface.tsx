@@ -33,7 +33,8 @@ const AuctionInterface: React.FC = () => {
     placeBid,
     completeAuction,
     resetPlayerStatuses,
-    fetchPlayers
+    fetchPlayers,
+    fetchTeams
   } = useApp();
   const { user } = useAuth();
 
@@ -390,6 +391,34 @@ const AuctionInterface: React.FC = () => {
   const handleMarkUnsoldAndRefresh = async (playerId: string) => {
     await handleMarkUnsold(playerId);
     await fetchTeamsAndSoldPlayers();
+  };
+
+  const handleUpdateTeamBudget = async (team: Team) => {
+    if (!canBid) return;
+    const currentBudget = toNumber(team.budget);
+    const nextBudgetInput = window.prompt(`Enter new total budget for ${team.name}`, String(currentBudget));
+    if (nextBudgetInput === null) return;
+
+    const nextBudget = Number(nextBudgetInput);
+    if (!Number.isFinite(nextBudget) || nextBudget < 0) {
+      showNotification('error', 'Please enter a valid non-negative budget');
+      return;
+    }
+
+    try {
+      await api.updateTeamBudget(team.id, nextBudget);
+      await Promise.all([
+        fetchTeamsAndSoldPlayers(),
+        fetchTeams ? fetchTeams() : Promise.resolve()
+      ]);
+      showNotification('success', `${team.name} budget updated to ${formatCurrency(nextBudget)}`);
+    } catch (error) {
+      if (error instanceof Error) {
+        showNotification('error', error.message || 'Failed to update team budget');
+      } else {
+        showNotification('error', 'Failed to update team budget');
+      }
+    }
   };
 
   if (!myTournament) {
@@ -791,37 +820,9 @@ const AuctionInterface: React.FC = () => {
               const totalBudget = Math.max(toNumber(team.budget), 1);
               const usedPercentage = ((totalBudget - remainingBudget) / totalBudget) * 100;
               const safeColor = team.color || '#888';
-
-              // Max Bid calculation (previous formula):
-              // maxBid = remainingBudget - ((minTeamSize - playersTaken - 1) * minBasePriceInTournament)
-              const playersTaken = (soldPlayersByTeam[team.id] || []).length;
-              // const minTeamSize = toNumber(myTournament?.minTeamSize);
-              let maxBid: number | null = null;
-              // if (minTeamSize > 0 && minBasePriceInTournament > 0) {
-              //   const remainingMandatorySlots = Math.max(minTeamSize - playersTaken - 1, 0);
-              //   maxBid = remainingBudget - remainingMandatorySlots * minBasePriceInTournament;
-              //   if (maxBid < 0) maxBid = 0;
-              // }
-
-              const holdbackByPlayersTaken: Record<number, number> = {
-                0: 29000,
-                1: 29000,
-                2: 24000,
-                3: 21000,
-                4: 18000,
-                5: 15000,
-                6: 12000,
-                7: 9000,
-                8: 6000,
-                9: 4500,
-                10: 3000,
-                11: 1500,
-                12: 0,
-                13: 0
-              };
-              const holdback = holdbackByPlayersTaken[playersTaken] ?? 0;
-              maxBid = remainingBudget - holdback;
-              if (maxBid < 0) maxBid = 0;
+              const maxBid = team.maxBid !== undefined && team.maxBid !== null
+                ? toNumber(team.maxBid)
+                : remainingBudget;
 
               return (
                 <div key={team.id} className="mb-4 bg-white rounded-lg shadow-sm border-2 p-4 transition-all duration-200 hover:shadow-md"
@@ -846,6 +847,14 @@ const AuctionInterface: React.FC = () => {
                       <div className="font-bold text-lg mb-2" style={{ color: safeColor }}>
                         {formatCurrency(remainingBudget)}
                       </div>
+                      {canBid && (
+                        <button
+                          onClick={() => handleUpdateTeamBudget(team)}
+                          className="mb-2 px-2 py-1 text-xs bg-indigo-600 text-white rounded hover:bg-indigo-700 transition-colors"
+                        >
+                          Update Budget
+                        </button>
+                      )}
                       {maxBid !== null && (
                         <>
                           <div className="text-sm font-medium text-gray-600 mb-1">Max Bid:</div>

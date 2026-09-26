@@ -7,6 +7,10 @@ async function getAuctioneerTournament(email) {
     return await Tournament.findOne({ auctioneerEmail: { $regex: new RegExp('^' + email + '$', 'i') } });
 }
 
+function normalizeCategory(value = '') {
+    return String(value).trim().toLowerCase();
+}
+
 exports.getAllTeams = async (req, res) => {
     try {
         const page = parseInt(req.query.page) || 1;
@@ -34,53 +38,72 @@ exports.getAllTeams = async (req, res) => {
                 .lean();
 
             if (tournament) {
-                const minTeamSize = tournament.minTeamSize || 0;
+                const categories = Array.isArray(tournament.categories) ? tournament.categories : [];
+                const teamIds = teams.map(team => team._id);
 
-                // Calculate minimum base price from tournament categories (minBalance)
-                const minBasePriceInTournament = tournament.categories && tournament.categories.length > 0
-                    ? Math.min(...tournament.categories
-                        .map(cat => cat.minBalance || 0)
-                        .filter(v => v > 0))
-                    : 0;
+                // Count sold players by team and category once, then reuse for all teams.
+                const PlayerTournament = require('../models/playerTournament');
+                const soldByTeamCategory = await PlayerTournament.aggregate([
+                    {
+                        $match: {
+                            tournamentId: tournament._id,
+                            status: 'sold',
+                            team: { $in: teamIds }
+                        }
+                    },
+                    {
+                        $project: {
+                            team: 1,
+                            categoryNormalized: { $toLower: { $ifNull: ['$category', ''] } }
+                        }
+                    },
+                    {
+                        $group: {
+                            _id: { team: '$team', category: '$categoryNormalized' },
+                            count: { $sum: 1 }
+                        }
+                    }
+                ]);
 
-                // Calculate maxBid for each team
+                const teamCategoryCountMap = new Map();
+                soldByTeamCategory.forEach(item => {
+                    const teamId = String(item._id.team);
+                    const categoryKey = String(item._id.category || '');
+                    if (!teamCategoryCountMap.has(teamId)) {
+                        teamCategoryCountMap.set(teamId, new Map());
+                    }
+                    teamCategoryCountMap.get(teamId).set(categoryKey, Number(item.count) || 0);
+                });
+
                 teams.forEach(team => {
-                    const remainingBudget = Number(team.remainingBudget) || 0;
-                    // Count unique players to handle any duplicates in the array
-                    const uniquePlayerIds = Array.isArray(team.players)
-                        ? new Set(team.players.map(p => String(p))).size
-                        : 0;
-                    const playersTaken = uniquePlayerIds;
+                    const remainingBudget = Math.max(Number(team.remainingBudget) || 0, 0);
+                    const teamId = String(team._id);
+                    const categoryMap = teamCategoryCountMap.get(teamId) || new Map();
 
-                    let maxBid = null;
-                    // Previous formula (kept for reference):
-                    // if (minTeamSize > 0 && minBasePriceInTournament > 0) {
-                    //     const remainingMandatorySlots = Math.max(minTeamSize - playersTaken - 1, 0);
-                    //     maxBid = remainingBudget - remainingMandatorySlots * minBasePriceInTournament;
-                    //     if (maxBid < 0) maxBid = 0;
-                    // }
+                    const categoryStates = categories.map(cat => {
+                        const required = Math.max(Number(cat.numPlayers) || 0, 0);
+                        const minBasePrice = Math.max(Number(cat.minBalance) || 0, 0);
+                        const soldCount = Math.max(Number(categoryMap.get(normalizeCategory(cat.category)) || 0), 0);
+                        const playersLeft = Math.max(required - soldCount, 0);
+                        return {
+                            playersLeft,
+                            minBasePrice
+                        };
+                    });
 
-                    const holdbackByPlayersTaken = {
-                        0: 29000,
-                        1: 29000,
-                        2: 24000,
-                        3: 21000,
-                        4: 18000,
-                        5: 15000,
-                        6: 12000,
-                        7: 9000,
-                        8: 6000,
-                        9: 4500,
-                        10: 3000,
-                        11: 1500,
-                        12: 0,
-                        13: 0
-                    };
-                    const holdback = holdbackByPlayersTaken[playersTaken] ?? 0;
-                    maxBid = remainingBudget - holdback;
-                    if (maxBid < 0) maxBid = 0;
+                    // Max bid is for the NEXT player:
+                    // assume the first still-pending category slot is filled by the next purchase.
+                    const firstPendingIdx = categoryStates.findIndex(cat => cat.playersLeft > 0);
+                    if (firstPendingIdx >= 0) {
+                        categoryStates[firstPendingIdx].playersLeft -= 1;
+                    }
 
-                    team.maxBid = maxBid;
+                    const mandatoryReserve = categoryStates.reduce(
+                        (sum, cat) => sum + cat.playersLeft * cat.minBasePrice,
+                        0
+                    );
+
+                    team.maxBid = Math.max(remainingBudget - mandatoryReserve, 0);
                 });
             }
         }
@@ -149,6 +172,48 @@ exports.updateTeam = async (req, res) => {
             .lean(); // Use lean() for better performance
         if (!updatedTeam) return res.status(404).json({ error: 'Team not found' });
         res.json(updatedTeam);
+    } catch (err) {
+        res.status(400).json({ error: err.message });
+    }
+};
+
+exports.updateTeamBudget = async (req, res) => {
+    try {
+        const { budget } = req.body;
+        const parsedBudget = Number(budget);
+
+        if (!Number.isFinite(parsedBudget) || parsedBudget < 0) {
+            return res.status(400).json({ error: 'Budget must be a non-negative number' });
+        }
+
+        const team = await Team.findById(req.params.id);
+        if (!team) return res.status(404).json({ error: 'Team not found' });
+
+        if (req.user && req.user.role === 'auctioneer') {
+            const myTournament = await getAuctioneerTournament(req.user.email);
+            if (!myTournament || String(team.tournamentId) !== String(myTournament._id)) {
+                return res.status(403).json({ error: 'Forbidden: You can only update teams for your assigned tournament.' });
+            }
+        }
+
+        const currentBudget = Number(team.budget) || 0;
+        const currentRemaining = Number(team.remainingBudget) || 0;
+        const spentAmount = Math.max(currentBudget - currentRemaining, 0);
+
+        if (parsedBudget < spentAmount) {
+            return res.status(400).json({ error: `Budget cannot be lower than amount already spent (${spentAmount})` });
+        }
+
+        team.budget = parsedBudget;
+        team.totalBudget = parsedBudget;
+        team.remainingBudget = parsedBudget - spentAmount;
+
+        const updatedTeam = await team.save();
+        const populatedTeam = await Team.findById(updatedTeam._id)
+            .populate('players', 'name photo age role')
+            .lean();
+
+        res.json(populatedTeam);
     } catch (err) {
         res.status(400).json({ error: err.message });
     }

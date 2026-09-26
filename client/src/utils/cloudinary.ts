@@ -3,8 +3,8 @@
 
 // Cloudinary configuration
 export const cloudinaryConfig = {
-    cloud_name: 'dviulhflk',
-    api_key: '899555547873116',
+    cloud_name: 'dovjt4m1h',
+    api_key: '734943383261482',
     upload_preset: 'auction-system' // Create this preset in your Cloudinary dashboard
 };
 

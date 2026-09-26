@@ -8,6 +8,7 @@ router.get('/', teamController.getAllTeams);
 router.get('/:id', teamController.getTeam);
 router.post('/', authMiddleware, roleMiddleware(['master', 'auctioneer']), teamController.createTeam);
 router.put('/:id', authMiddleware, roleMiddleware(['master', 'auctioneer']), teamController.updateTeam);
+router.patch('/:id/budget', authMiddleware, roleMiddleware(['master', 'auctioneer']), teamController.updateTeamBudget);
 router.delete('/:id', authMiddleware, roleMiddleware(['master', 'auctioneer']), teamController.deleteTeam);
 
-module.exports = router; 
+module.exports = router;

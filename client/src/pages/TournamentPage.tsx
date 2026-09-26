@@ -33,7 +33,7 @@ const TournamentPage: React.FC = () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const [liveAuctionPlayer, setLiveAuctionPlayer] = useState<any>(null);
     const [currentBidderTeam, setCurrentBidderTeam] = useState<string | null>(null);
-    const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+    const API_BASE = import.meta.env.VITE_API_URL || 'https://cricket-auction-yvh3.onrender.com';
     const [, setSocket] = useState<Socket | null>(null);
 
     // --- State for player tabs ---
@@ -232,6 +232,7 @@ const TournamentPage: React.FC = () => {
             setCurrentBidderTeam(null);
         }
     }, [liveAuction?.currentBidderName]);
+
 
     useEffect(() => {
         return () => {
@@ -676,6 +677,7 @@ const TournamentPage: React.FC = () => {
                                                         </div>
                                                     </div>
                                                 </div>
+
                                             </div>
                                         </div>
                                     </div>
