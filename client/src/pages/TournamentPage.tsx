@@ -342,7 +342,7 @@ const TournamentPage: React.FC = () => {
             <div className="min-h-screen flex items-center justify-center">
                 <div className="text-center">
                     <div className="w-8 h-8 border-4 border-yellow-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-                    <p className="text-gray-600">Loading tournament...</p>
+                    <p className="text-gray-600">Next Player coming up soon...</p>
                 </div>
             </div>
         );
