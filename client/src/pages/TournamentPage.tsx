@@ -272,8 +272,12 @@ const TournamentPage: React.FC = () => {
     }, [categoryOptions, selectedCategory]);
 
     const filteredTabPlayers = useMemo(() => {
-        if (!selectedCategory) return tabPlayers;
-        return tabPlayers.filter(player => player.category === selectedCategory);
+        const list = !selectedCategory
+            ? tabPlayers
+            : tabPlayers.filter(player => player.category === selectedCategory);
+        return [...list].sort((a, b) =>
+            (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' })
+        );
     }, [tabPlayers, selectedCategory]);
 
     // --- Fetch teams for Teams & Players tab ---
@@ -632,7 +636,7 @@ const TournamentPage: React.FC = () => {
                                                                 <Award className="w-3 h-3 sm:w-4 sm:h-4 text-purple-400" />
                                                             </div>
                                                             <div className="min-w-0">
-                                                                <div className="text-xs text-purple-300 truncate">Station</div>
+                                                                <div className="text-xs text-purple-300 truncate">Station / Village</div>
                                                                 <div className="text-base sm:text-lg font-bold text-white truncate">{liveAuctionPlayer?.station || '-'}</div>
                                                             </div>
                                                         </div>
